@@ -4,10 +4,15 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "hermes-quant"
-version = "0.0.1"
 description = "A-share quantitative research, backtest and paper-trading system (codename Hermes)."
 requires-python = ">=3.12"
 readme = "README.md"
+authors = [{ name = "Rhymer-Lcy" }]
+dynamic = ["version"]
+classifiers = [
+    "Private :: Do Not Upload",  # hard-blocks accidental PyPI publish
+    "Programming Language :: Python :: 3.12",
+]
 dependencies = [
     "numpy",
     "pandas<3",  # alphalens-reloaded (vnpy[alpha] extra) requires pandas<3; pinned for env consistency
@@ -22,14 +27,26 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# Installed editable from ./external (your forks), not from PyPI:
-#   pip install -e external/vnpy
+dev = ["pytest"]
+# vnpy etc. are installed editable from ./external (pip install -e external/vnpy),
 # kept out of `dependencies` so secondary-dev edits take effect.
 notebooks = ["jupyterlab"]
+
+[project.urls]
+Repository = "https://github.com/Rhymer-Lcy/hermes-quant"
+
+[tool.setuptools.dynamic]
+version = { attr = "hermes.__version__" }
 
 [tool.setuptools.packages.find]
 where = ["src"]
 include = ["hermes*"]
+
+[tool.setuptools.package-data]
+hermes = ["py.typed"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
 
 [tool.ruff]
 line-length = 100
