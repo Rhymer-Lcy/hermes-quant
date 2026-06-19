@@ -4,16 +4,14 @@
 
     python scripts/build_pit_dataset.py
 """
-from hermes.data.ingest import pull_universe
+from hermes.data.ingest import pull_universe, write_pull_summary
 from hermes.data.membership import build_membership
 
 
 def main() -> None:
     _, union = build_membership()
     print(f"pulling {len(union)} union names (incl. removed/delisted)...")
-    summary = pull_universe(union)
-    ok = int((summary["status"] == "ok").sum())
-    print(f"pulled {ok}/{len(summary)} symbols")
+    write_pull_summary(pull_universe(union), "union")
 
 
 if __name__ == "__main__":
