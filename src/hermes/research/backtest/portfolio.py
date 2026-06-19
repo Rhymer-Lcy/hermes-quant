@@ -5,14 +5,22 @@ No-lookahead: signal from the month-end close, executed at the NEXT trading day'
 close. T+1 is respected (monthly holding). 100-share lots, per-trade 5元 minimum
 commission, stamp tax, and slippage are all modeled.
 
-PURPOSE: expose the small-account problem. At 5k–3万 capital the 100-share lot
+PURPOSE: expose the small-account problem. At small capital the 100-share lot
 makes it impossible to actually hold N names, so diversification collapses and the
 per-trade minimum commission bites hardest. `avg_names_held` reports the EFFECTIVE
 diversification vs the target `n_hold`.
 
-DOCUMENTED SIMPLIFICATION (not hidden): 涨跌停 no-fill is not modeled here (rare for
-a monthly rebalance on liquid HS300). It is added in the RQAlpha cross-check step.
-This is a friction/feasibility demo, not a validated alpha.
+Delisting/removal: a holding whose price series permanently ends (delisting, or
+removal plus a terminal halt) is force-liquidated once at its last real price net of
+fees and is never valued past that bar -- otherwise a dead name would re-enter P&L
+at a stale forward-filled price and reintroduce survivorship bias.
+
+DOCUMENTED SIMPLIFICATIONS (not hidden): (1) 涨跌停 no-fill is not modeled here (rare
+for a monthly rebalance on liquid HS300); added in the RQAlpha cross-check step.
+(2) Lot-sizing/affordability use the 前复权 price LEVEL, which differs from the true
+historical RMB price by future dividends -- approximate at the smallest tiers until a
+raw (不复权) price panel is wired in for sizing. This is a friction/feasibility demo,
+not validated alpha.
 """
 from __future__ import annotations
 
@@ -50,13 +58,23 @@ def _hold_value(positions: dict[str, int], val: pd.Series) -> float:
 
 
 def momentum_portfolio_backtest(panel: pd.DataFrame, capital: float, n_hold: int = 10,
-                                lookback: int = 20, costs: AShareCosts | None = None) -> PortfolioResult:
+                                lookback: int = 20, costs: AShareCosts | None = None,
+                                members_asof=None) -> PortfolioResult:
+    """`members_asof`: optional callable(signal_date) -> set[code] restricting the
+    candidate universe to point-in-time index members (kills survivorship bias)."""
     costs = costs or AShareCosts()
     lot = costs.lot_size
     slip = costs.slip
 
     panel = panel.sort_index()
-    valuation = panel.ffill()                 # mark-to-market (carry last price through halts)
+    # Per-column last real bar: do NOT value or hold a delisted/terminated name past
+    # its final price (review bug #1 -- an unbounded ffill carries a dead name forever).
+    last_valid = {c: panel[c].last_valid_index() for c in panel.columns}
+    last_price = {c: panel[c].loc[lv] for c, lv in last_valid.items() if lv is not None}
+    valuation = panel.ffill()                 # carry last price through INTERIOR halts...
+    for c, lv in last_valid.items():          # ...but never past a name's final bar
+        if lv is not None:
+            valuation.loc[valuation.index > lv, c] = np.nan
     dates = panel.index
     n = len(dates)
 
@@ -73,8 +91,22 @@ def momentum_portfolio_backtest(panel: pd.DataFrame, capital: float, n_hold: int
     equity = np.empty(n)
 
     for i in range(n):
+        di = dates[i]
         raw = panel.iloc[i]                   # raw price = tradability + exec price
         val = valuation.iloc[i]               # ffilled = valuation
+
+        # Force-exit holdings whose data has permanently ended (delisting / removal +
+        # terminal halt): liquidate once at the last real price net of fees. Runs every
+        # bar since a name can die between rebalances; distinct from an interior halt
+        # (which has a later last_valid, so di never exceeds it during the halt).
+        for code in list(positions.keys()):
+            lv = last_valid.get(code)
+            if lv is not None and di > lv:
+                qty = positions.pop(code)
+                turnover = qty * last_price[code]
+                fee = costs.sell_fees(turnover)
+                cash += turnover - fee
+                total_costs += fee
 
         if i in rebal_exec:
             si = rebal_exec[i]
@@ -82,6 +114,9 @@ def momentum_portfolio_backtest(panel: pd.DataFrame, capital: float, n_hold: int
                 ret = panel.iloc[si] / panel.iloc[si - lookback] - 1.0
                 ret = ret.dropna()
                 ret = ret[raw.reindex(ret.index).notna()]          # must be tradable at exec
+                if members_asof is not None:                       # point-in-time universe
+                    members = members_asof(dates[si])
+                    ret = ret[ret.index.isin(members)]
                 top = ret.sort_values(ascending=False).head(n_hold).index.tolist()
 
                 equity_now = cash + _hold_value(positions, val)
