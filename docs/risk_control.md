@@ -72,3 +72,10 @@ a small, clean, free improvement; the low-vol blend is shelved. Cutting the syst
 drawdown materially would need either genuine breadth (uncorrelated factors / more names /
 smaller caps) or a non-naive hedge -- not a position-level tweak. → next is **breadth**
 (factor diversification, option B), not more drawdown plumbing.
+
+**Update — option B done (see [docs/multi_factor.md](multi_factor.md)):** factor
+diversification *did* raise Calmar (a light 1-month-reversal tilt, 0.28 → 0.32, above A2's
+0.30, with gross/zero-cost Calmar rising too, so it is real alpha) -- but **maxDD stayed
+~−33%**. Breadth helped the numerator (return), not the drawdown, confirming yet again that
+−33% is systematic. Cutting the drawdown itself still needs the *universe* dimension
+(CSI 500/1000), sector-neutralization, or the deferred size factor -- all pending new data.
