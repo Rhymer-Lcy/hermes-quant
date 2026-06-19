@@ -4,9 +4,10 @@ Convention: every factor is oriented so that HIGHER = more attractive (expected
 higher forward return), which makes IC signs and quantile spreads comparable across
 factors. All take/return wide daily panels (date x code).
 
-Point-in-time note: value factors (pe/pb) and size (mv) are daily as-of values, so
-they carry no announcement lag. Price-based factors (momentum/vol/reversal) use only
-past closes. Quality (ROE) will be aligned by announcement date when added.
+Point-in-time note: value factors (pe/pb) are daily as-of values, so they carry no
+announcement lag; price-based factors (momentum/vol/reversal) use only past closes.
+Size (market cap) is implemented in small_size() but its data is NOT yet ingested
+(see scripts/ingest_size.py); quality (ROE) will be aligned by announcement date when added.
 """
 from __future__ import annotations
 
@@ -61,5 +62,9 @@ def book_yield(pb: pd.DataFrame) -> pd.DataFrame:
 
 
 def small_size(total_mv: pd.DataFrame) -> pd.DataFrame:
-    """Negative log market cap (the small-size premium)."""
+    """Negative log market cap (the small-size premium).
+
+    NOT in the evaluated factor set yet: market-cap ingestion is DEFERRED (Tushare
+    daily_basic is rate-limited on the current tier; see scripts/ingest_size.py).
+    """
     return -np.log(total_mv.where(total_mv > 0))

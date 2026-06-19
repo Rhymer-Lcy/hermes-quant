@@ -8,8 +8,15 @@
 *.joblib
 *.parquet
 
-# editable-installed forks (kept as separate repos, not vendored)
-external/*/
+# editable-installed forks (separate repos, not vendored). Ignore everything under
+# external/ except the two tracked metadata files, so a loose file dropped there
+# (scratch log, token note) is not silently staged by `git add external/`.
+external/*
+!external/README.md
+!external/versions.lock
+
+# notebooks: scratch — never commit cell outputs (data/secrets leak surface)
+notebooks/*.ipynb
 
 # python
 __pycache__/

@@ -13,7 +13,7 @@ import pandas as pd
 from hermes.data.lake import load_close_panel
 from hermes.data.membership import MEMBERSHIP_PARQUET, membership_lookup
 from hermes.paths import BACKTESTS_DIR, SIGNALS_DIR, ensure_dirs
-from hermes.research.backtest.portfolio import momentum_portfolio_backtest, signal_portfolio_backtest
+from hermes.research.backtest.portfolio import signal_portfolio_backtest
 from hermes.research.eval.factor_eval import compute_ic, quantile_returns
 from hermes.research.factors import library as fl
 from hermes.research.model.walk_forward import build_dataset, walk_forward_predict

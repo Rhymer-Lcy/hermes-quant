@@ -7,8 +7,10 @@ per-name budget at 5k/10 is only a few hundred. Diversification is structurally
 impossible at the smallest accounts.
 
     python scripts/portfolio_demo.py
+
+This is the NON-PIT baseline (current-membership universe). See portfolio_pit_demo.py
+for the canonical survivorship-free biased-vs-PIT study.
 """
-import pandas as pd
 
 from hermes.data.lake import load_close_panel
 from hermes.research import CAPITAL_TIERS

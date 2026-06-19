@@ -37,7 +37,3 @@ show("stock_basic list_status=L (listed)",
      lambda: pro.stock_basic(exchange="", list_status="L", fields="ts_code,name,list_date"))
 show("stock_basic list_status=P (paused)",
      lambda: pro.stock_basic(exchange="", list_status="P", fields="ts_code,name,list_date"))
-
-# 4) Adjusted daily bars via pro_bar (qfq) for one normal name.
-show("pro_bar 600000.SH qfq 2024-01",
-     lambda: ts.pro_bar(ts_code="600000.SH", adj="qfq", start_date="20240102", end_date="20240110"))
