@@ -7,6 +7,13 @@ Retail defaults, mid-2026:
   - transfer fee (过户费): 万0.1 (0.001%), both sides
   - slippage (滑点):       modeled as bps on the execution price, both sides
   - lot size (一手):       100 shares
+
+The 佣金 rate is the broker's ALL-IN quote, i.e. it already includes the exchange/
+regulator 规费 (经手费 ~万0.341 + 证管费 ~万0.2 ≈ 万0.541 round-trip) that brokers
+collect bundled into commission -- so net commission is ~万1.96 + 规费. We do NOT add 规费
+again on top (double-counting). 万2.5 all-in is a conservative retail level (many accounts
+negotiate 万1.5-万2). NOT modeled: 涨跌停 no-fill (rare for a monthly HS300 rebalance;
+cross-checked in RQAlpha, which does model it) -- see docs/engine_validation.md.
 """
 from __future__ import annotations
 
