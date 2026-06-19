@@ -1,0 +1,23 @@
+# external/versions.lock -- pinned commit of each editable fork in external/.
+# Reproduce: clone the fork, `git checkout <commit>`, `pip install -e external/<name>`.
+# Regenerate with: python scripts/lock_externals.py
+
+rqalpha
+  origin   https://github.com/Rhymer-Lcy/rqalpha.git
+  upstream https://github.com/ricequant/rqalpha.git
+  commit   745d81cf11c7f620f1aec7f7b1447b26796f79be
+
+vnpy
+  origin   https://github.com/Rhymer-Lcy/vnpy.git
+  upstream https://github.com/vnpy/vnpy.git
+  commit   1b78494979deb4c4996f6b864f234d9839f2f239
+
+vnpy_paperaccount
+  origin   https://github.com/Rhymer-Lcy/vnpy_paperaccount.git
+  upstream https://github.com/vnpy/vnpy_paperaccount.git
+  commit   fcfe2b58965a0dc99b5cdbe075d5a372d8ef3ac2
+
+vnpy_xt
+  origin   https://github.com/Rhymer-Lcy/vnpy_xt.git
+  upstream https://github.com/vnpy/vnpy_xt.git
+  commit   23a32da6d80cc14516fda4cc21fc4c6819a36c19
