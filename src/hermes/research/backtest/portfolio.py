@@ -58,7 +58,8 @@ def _hold_value(positions: dict[str, int], val: pd.Series) -> float:
 
 
 def _score_backtest(price: pd.DataFrame, scores: pd.DataFrame, capital: float,
-                    n_hold: int, costs: AShareCosts | None, members_asof) -> PortfolioResult:
+                    n_hold: int, costs: AShareCosts | None, members_asof,
+                    exposure_asof=None) -> PortfolioResult:
     """Engine: each month hold the equal-weight top-`n_hold` names by `scores` (read
     at the month-end signal date, executed next trading day), with A-share frictions."""
     costs = costs or AShareCosts()
@@ -115,7 +116,8 @@ def _score_backtest(price: pd.DataFrame, scores: pd.DataFrame, capital: float,
 
                 if top:
                     equity_now = cash + _hold_value(positions, val)
-                    target_val = equity_now / n_hold
+                    exposure = exposure_asof(sd) if exposure_asof is not None else 1.0
+                    target_val = equity_now * exposure / n_hold
 
                     desired: dict[str, int] = {}
                     for code in top:
@@ -195,7 +197,9 @@ def momentum_portfolio_backtest(panel: pd.DataFrame, capital: float, n_hold: int
 
 def signal_portfolio_backtest(price: pd.DataFrame, signal: pd.DataFrame, capital: float,
                               n_hold: int = 10, costs: AShareCosts | None = None,
-                              members_asof=None) -> PortfolioResult:
+                              members_asof=None, exposure_asof=None) -> PortfolioResult:
     """Top-N by an external `signal` panel (date x code), e.g. walk-forward ML
-    out-of-sample predictions. `price` is the 前复权 close panel for exec/valuation."""
-    return _score_backtest(price, signal, capital, n_hold, costs, members_asof)
+    out-of-sample predictions. `price` is the 前复权 close panel for exec/valuation.
+    `exposure_asof`: optional callable(signal_date)->float in [0,1] scaling gross
+    exposure (e.g. a market-regime filter); the remainder is held as cash."""
+    return _score_backtest(price, signal, capital, n_hold, costs, members_asof, exposure_asof)

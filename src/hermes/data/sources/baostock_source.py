@@ -66,3 +66,20 @@ def daily_bars(code: str, start: str, end: str, adjustflag: str = "2") -> pd.Dat
     if "isST" in df.columns:
         df["isST"] = df["isST"].astype("string").fillna("0").eq("1")
     return df
+
+
+def index_close(code: str, start: str, end: str) -> pd.Series:
+    """Daily close for an index (e.g. 'sh.000300' = 沪深300). Call inside `session()`.
+    Indices have no valuation/复权 fields, so only date+close are requested."""
+    rs = bs.query_history_k_data_plus(code, "date,close", start_date=start, end_date=end,
+                                      frequency="d")
+    if rs.error_code != "0":
+        raise RuntimeError(f"BaoStock index query failed for {code}: {rs.error_code} {rs.error_msg}")
+    rows = []
+    while rs.next():
+        rows.append(rs.get_row_data())
+    df = pd.DataFrame(rows, columns=rs.fields)
+    if df.empty:
+        return pd.Series(dtype=float)
+    df["date"] = pd.to_datetime(df["date"])
+    return pd.to_numeric(df["close"], errors="coerce").set_axis(df["date"]).rename(code)
