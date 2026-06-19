@@ -57,14 +57,34 @@ def _hold_value(positions: dict[str, int], val: pd.Series) -> float:
     return tot
 
 
+def _select_top(ranked: list[str], held: set[str], n_hold: int, band: int) -> list[str]:
+    """Top-`n_hold` by score, with a turnover buffer (hysteresis): an existing holding is
+    KEPT while it stays within the top `n_hold + band` -- it need not re-enter the strict
+    top-`n_hold` -- so names hovering at the cutoff don't churn in and out every month. New
+    names must rank in the top `n_hold` to enter. band=0 reduces to a plain top-`n_hold`.
+    Critical for high-turnover signals (e.g. short-term reversal) where round-trip frictions
+    can eat the factor's edge. Precondition: `ranked` is unique (the engine passes a unique
+    column index); a non-unique `ranked` could duplicate a held name."""
+    if band <= 0:
+        return ranked[:n_hold]
+    chosen = [c for c in ranked[:n_hold + band] if c in held][:n_hold]   # keep incumbents in exit zone
+    for c in ranked[:n_hold]:                                            # fill rest with fresh entrants
+        if len(chosen) >= n_hold:
+            break
+        if c not in chosen:
+            chosen.append(c)
+    return chosen
+
+
 def _score_backtest(price: pd.DataFrame, scores: pd.DataFrame, capital: float,
                     n_hold: int, costs: AShareCosts | None, members_asof,
-                    exposure_asof=None, weight_asof=None) -> PortfolioResult:
+                    exposure_asof=None, weight_asof=None, rebalance_band: int = 0) -> PortfolioResult:
     """Engine: each month hold the top-`n_hold` names by `scores` (read at the month-end
     signal date, executed next trading day), with A-share frictions. Weighting is equal
     by default; `weight_asof` supplies an alternative intra-basket weighting (e.g.
     inverse-vol) WITHOUT changing the gross-invested fraction, so a weighting scheme is
-    compared to equal weight on like terms."""
+    compared to equal weight on like terms. `rebalance_band` adds a turnover buffer (see
+    _select_top): incumbents are kept while within the top n_hold+band, cutting churn."""
     costs = costs or AShareCosts()
     lot = costs.lot_size
     slip = costs.slip
@@ -115,7 +135,9 @@ def _score_backtest(price: pd.DataFrame, scores: pd.DataFrame, capital: float,
                 f = f[raw.reindex(f.index).notna()]            # tradable at exec
                 if members_asof is not None:                   # point-in-time universe
                     f = f[f.index.isin(members_asof(sd))]
-                top = f.sort_values(ascending=False).head(n_hold).index.tolist()
+                ranked = f.sort_values(ascending=False).index.tolist()
+                held = {c for c, sh in positions.items() if sh > 0}
+                top = _select_top(ranked, held, n_hold, rebalance_band)
 
                 if top:
                     equity_now = cash + _hold_value(positions, val)
@@ -215,12 +237,13 @@ def momentum_portfolio_backtest(panel: pd.DataFrame, capital: float, n_hold: int
 def signal_portfolio_backtest(price: pd.DataFrame, signal: pd.DataFrame, capital: float,
                               n_hold: int = 10, costs: AShareCosts | None = None,
                               members_asof=None, exposure_asof=None,
-                              weight_asof=None) -> PortfolioResult:
+                              weight_asof=None, rebalance_band: int = 0) -> PortfolioResult:
     """Top-N by an external `signal` panel (date x code), e.g. walk-forward ML
     out-of-sample predictions. `price` is the 前复权 close panel for exec/valuation.
     `exposure_asof`: optional callable(signal_date)->float in [0,1] scaling gross
     exposure (e.g. a market-regime filter); the remainder is held as cash.
     `weight_asof`: optional callable(signal_date, codes)->{code: weight} for intra-basket
-    weighting (e.g. inverse-vol); equal weight if omitted."""
+    weighting (e.g. inverse-vol); equal weight if omitted.
+    `rebalance_band`: turnover buffer (keep incumbents within top n_hold+band); 0 = off."""
     return _score_backtest(price, signal, capital, n_hold, costs, members_asof,
-                           exposure_asof, weight_asof)
+                           exposure_asof, weight_asof, rebalance_band)

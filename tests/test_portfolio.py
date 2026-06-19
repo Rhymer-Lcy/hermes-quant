@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 
 from hermes.research.backtest.frictions import ZERO_COSTS
-from hermes.research.backtest.portfolio import signal_portfolio_backtest
+from hermes.research.backtest.portfolio import _select_top, signal_portfolio_backtest
 
 
 def test_delisted_holding_is_liquidated_and_capital_recycled():
@@ -65,3 +65,39 @@ def test_weighting_shifts_capital_toward_overweighted_name():
     assert 0.45 < eq.total_return < 0.55
     assert 0.75 < fav_b.total_return < 0.85
     assert fav_b.total_return > eq.total_return
+
+
+def test_select_top_band_zero_is_plain_topn():
+    assert _select_top(["a", "b", "c", "d", "e"], {"x", "y"}, 3, 0) == ["a", "b", "c"]
+
+
+def test_select_top_keeps_incumbent_in_buffer_zone():
+    # ranked a>b>c>d>e, n_hold=3, band=2 (exit zone = top5). `e` is held and still in the
+    # exit zone (rank 5) though outside the strict top-3 -> kept; slots filled from top-3.
+    out = _select_top(["a", "b", "c", "d", "e"], {"e"}, 3, 2)
+    assert out[0] == "e" and len(out) == 3 and set(out) == {"e", "a", "b"}
+
+
+def test_select_top_new_name_must_rank_in_strict_topn():
+    # `d` (rank 4, not held) must NOT enter at band=2; with no incumbents -> plain top-3.
+    assert _select_top(["a", "b", "c", "d", "e"], set(), 3, 2) == ["a", "b", "c"]
+
+
+def test_rebalance_buffer_cuts_turnover_cost():
+    # `a` always ranks 1st; `b`/`c` alternate the 2nd slot each month. With n_hold=2 and no
+    # buffer the 2nd holding churns b<->c every month (cost); a band=1 buffer (exit zone =
+    # top-3 = all) keeps the incumbent, so it trades once and then holds -> strictly cheaper.
+    dates = pd.bdate_range("2020-01-02", "2020-06-30")
+    price = pd.DataFrame(10.0, index=dates, columns=["a", "b", "c"])   # flat prices
+    periods = dates.to_period("M")
+    uniq = list(dict.fromkeys(periods))
+    even = {p for i, p in enumerate(uniq) if i % 2 == 0}
+    signal = pd.DataFrame(index=dates)
+    signal["a"] = 3.0
+    signal["b"] = [2.0 if p in even else 1.0 for p in periods]
+    signal["c"] = [1.0 if p in even else 2.0 for p in periods]
+
+    kw = dict(capital=1_000_000, n_hold=2)
+    no_buf = signal_portfolio_backtest(price, signal, rebalance_band=0, **kw)
+    buf = signal_portfolio_backtest(price, signal, rebalance_band=1, **kw)
+    assert buf.total_costs < no_buf.total_costs
