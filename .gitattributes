@@ -1,0 +1,15 @@
+# Normalize all text files to LF in the repository AND the working tree, so the
+# repo is identical on Windows (this PC) and Linux (the V100 cluster). This is
+# what removes the "LF will be replaced by CRLF" warnings.
+* text=auto eol=lf
+
+# Binary files — never normalize or diff as text.
+*.parquet binary
+*.joblib binary
+*.gz binary
+*.zip binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.xlsx binary
+*.mo binary

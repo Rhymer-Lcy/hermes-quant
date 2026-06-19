@@ -1,0 +1,23 @@
+# secrets
+.env.local
+
+# local data lake & caches (large, regenerable) — anchored to repo root so the
+# `hermes/data/` source package is NOT ignored, only the top-level data lake.
+/data/
+*.joblib
+*.parquet
+
+# editable-installed forks (kept as separate repos, not vendored)
+external/*/
+
+# python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.ipynb_checkpoints/
+
+# editors / os
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

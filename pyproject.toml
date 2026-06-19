@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hermes-quant"
+version = "0.0.1"
+description = "A-share quantitative research, backtest and paper-trading system (codename Hermes)."
+requires-python = ">=3.12"
+readme = "README.md"
+dependencies = [
+    "numpy",
+    "pandas<3",  # alphalens-reloaded (vnpy[alpha] extra) requires pandas<3; pinned for env consistency
+    "scipy",
+    "scikit-learn",
+    "lightgbm",
+    "pyarrow",
+    "matplotlib",
+    "akshare",
+    "baostock",
+    "tushare",
+]
+
+[project.optional-dependencies]
+# Installed editable from ./external (your forks), not from PyPI:
+#   pip install -e external/vnpy
+# kept out of `dependencies` so secondary-dev edits take effect.
+notebooks = ["jupyterlab"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["hermes*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"

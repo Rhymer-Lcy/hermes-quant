@@ -1,0 +1,90 @@
+# hermes-quant
+
+A-share (大陆股市) quantitative research, backtesting, and paper-trading system.
+Codename **Hermes** — the Greek god of commerce and trade.
+
+> Status: scaffolding. The first milestone is a closed loop of
+> *BaoStock historical pull → friction-faithful backtest → local paper trading*,
+> built before any real-money execution.
+
+## Architecture
+
+The system deliberately splits **offline research** from **online execution**,
+because no single open-source tool does both well for A-shares.
+
+```
+            ┌─────────────────────────────┐         ┌──────────────────────────┐
+            │  RESEARCH  (offline)         │ signals │  EXECUTION  (online)     │
+            │  cluster: V100x8 / local PC  │ ──────▶ │  local PC (Windows)      │
+            │                              │ (files) │                          │
+            │  Qlib / vnpy.alpha           │         │  vnpy + paper account    │
+            │  factors · models · backtest │         │  → (later) miniQMT live  │
+            └─────────────────────────────┘         └──────────────────────────┘
+                         │
+                         ▼
+            RQAlpha friction gate  (T+1 · 涨跌停 · 印花税 · 5元最低佣金 · 100股)
+```
+
+Three staged pipeline (a strategy only advances when the prior stage holds up):
+
+1. **Backtest** on historical data — research/train offline; **every candidate must
+   pass an A-share-faithful friction model** (RQAlpha or vnpy.alpha) before advancing.
+   vnpy's default CTA backtester is futures-style and will *overstate* P&L at small
+   accounts — never trust un-frictioned backtest returns.
+2. **Realtime paper trading** (模拟盘) at several capital tiers (5k / 1万 / 3万 /
+   10万 / 50万). There is no free hosted A-share stock sim server, so we drive a
+   local simulated matching engine off a live L1 (~3s) snapshot feed. The capital
+   tiers are a config exercise on one strategy object.
+3. **Live** (small real money) — *deferred*. Same strategy object, swap the gateway.
+
+See [docs/architecture.md](docs/architecture.md) for the full stack rationale.
+
+## Hardware split
+
+| Workload | Where | GPU? |
+|---|---|---|
+| Factor/model training, HPO sweeps, rolling retrain | company V100×8 cluster | parallel jobs, one GPU per task |
+| Backtest, paper trading, live execution, data ETL | local PC (i7-14700KF + RTX 5080) | none — these are CPU/process problems |
+
+The cluster buys **research throughput and validation rigor**, not bigger models
+or trading edge. A-share data is low signal-to-noise; honest costs, point-in-time
+discipline, and out-of-sample survival matter more than model size.
+
+## Environment
+
+Conda env **`hermes`** (Python 3.12). Core research/data stack is installed.
+The forks (vnpy etc.) are installed editable from [external/](external/README.md).
+
+```
+conda activate hermes
+python scripts/smoke_baostock.py        # verify the data link
+```
+
+## Data sources
+
+| Source | Auth | Role |
+|---|---|---|
+| **BaoStock** | none (anonymous) | free historical daily backbone — start here |
+| **Tushare Pro** | free token (some fields need 积分) | financials, point-in-time index members, delisting |
+| **AKShare** | none (scraper) | realtime L1 snapshot for paper trading only — fragile, not for the historical backbone |
+
+Backtest window: **2015-01-01 → present** (multi-regime), most recent ~1–2 years
+held out for walk-forward validation. **Delisted stocks are included** to avoid
+survivorship bias. Price-limit rules differ by board/date (科创板/创业板 = ±20%).
+
+## Layout
+
+```
+src/hermes/        importable package (src-layout, PyPA-recommended)
+  paths.py         single source of truth for on-disk locations
+  config.py        secret/token loading (env → .env.local)
+  data/            ETL: vendor adapters → adjusted parquet data lake
+  research/        offline: factors, backtest, eval (calibration metrics)
+  live/            online: snapshot collector, idempotent ledger
+  execution/       vnpy strategy adapters
+scripts/           runnable entrypoints & smoke tests
+data/              local data lake (gitignored)
+external/          forks, pip install -e (gitignored)
+docs/              architecture & decisions
+notebooks/         research scratch
+```
