@@ -59,9 +59,12 @@ def _hold_value(positions: dict[str, int], val: pd.Series) -> float:
 
 def _score_backtest(price: pd.DataFrame, scores: pd.DataFrame, capital: float,
                     n_hold: int, costs: AShareCosts | None, members_asof,
-                    exposure_asof=None) -> PortfolioResult:
-    """Engine: each month hold the equal-weight top-`n_hold` names by `scores` (read
-    at the month-end signal date, executed next trading day), with A-share frictions."""
+                    exposure_asof=None, weight_asof=None) -> PortfolioResult:
+    """Engine: each month hold the top-`n_hold` names by `scores` (read at the month-end
+    signal date, executed next trading day), with A-share frictions. Weighting is equal
+    by default; `weight_asof` supplies an alternative intra-basket weighting (e.g.
+    inverse-vol) WITHOUT changing the gross-invested fraction, so a weighting scheme is
+    compared to equal weight on like terms."""
     costs = costs or AShareCosts()
     lot = costs.lot_size
     slip = costs.slip
@@ -117,12 +120,26 @@ def _score_backtest(price: pd.DataFrame, scores: pd.DataFrame, capital: float,
                 if top:
                     equity_now = cash + _hold_value(positions, val)
                     exposure = exposure_asof(sd) if exposure_asof is not None else 1.0
-                    target_val = equity_now * exposure / n_hold
+                    gross = equity_now * exposure
+
+                    # Intra-basket weights summing to 1 over `top`; equal by default.
+                    # `scale` keeps the gross-invested fraction identical to equal weight
+                    # (unfilled target slots stay cash), so weighting is compared on like
+                    # terms -- only the split WITHIN the basket changes.
+                    if weight_asof is not None:
+                        raw_w = weight_asof(sd, top)
+                        s = sum(max(raw_w.get(c, 0.0), 0.0) for c in top)
+                        w = ({c: max(raw_w.get(c, 0.0), 0.0) / s for c in top} if s > 0
+                             else {c: 1.0 / len(top) for c in top})
+                    else:
+                        w = {c: 1.0 / len(top) for c in top}
+                    scale = len(top) / n_hold
 
                     desired: dict[str, int] = {}
                     for code in top:
                         p = raw.get(code, np.nan)
                         if not np.isnan(p):
+                            target_val = gross * w[code] * scale
                             desired[code] = int(target_val // (p * (1 + slip) * lot)) * lot
                     for code in list(positions.keys()):
                         desired.setdefault(code, 0)
@@ -197,9 +214,13 @@ def momentum_portfolio_backtest(panel: pd.DataFrame, capital: float, n_hold: int
 
 def signal_portfolio_backtest(price: pd.DataFrame, signal: pd.DataFrame, capital: float,
                               n_hold: int = 10, costs: AShareCosts | None = None,
-                              members_asof=None, exposure_asof=None) -> PortfolioResult:
+                              members_asof=None, exposure_asof=None,
+                              weight_asof=None) -> PortfolioResult:
     """Top-N by an external `signal` panel (date x code), e.g. walk-forward ML
     out-of-sample predictions. `price` is the 前复权 close panel for exec/valuation.
     `exposure_asof`: optional callable(signal_date)->float in [0,1] scaling gross
-    exposure (e.g. a market-regime filter); the remainder is held as cash."""
-    return _score_backtest(price, signal, capital, n_hold, costs, members_asof, exposure_asof)
+    exposure (e.g. a market-regime filter); the remainder is held as cash.
+    `weight_asof`: optional callable(signal_date, codes)->{code: weight} for intra-basket
+    weighting (e.g. inverse-vol); equal weight if omitted."""
+    return _score_backtest(price, signal, capital, n_hold, costs, members_asof,
+                           exposure_asof, weight_asof)
