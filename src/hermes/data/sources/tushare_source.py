@@ -3,6 +3,10 @@
 daily_basic by ts_code works on this token tier (by trade_date is rate-limited to
 1/min; fina_indicator is not permitted). These market-ratio fields are daily as-of
 values, so they are point-in-time without announcement-lag concerns.
+
+DEFERRED: a full-universe size pull is impractical on the current token tier
+(daily_basic ~1 call/min), so the size factor is NOT yet in the evaluated set
+(see scripts/ingest_size.py). The adapter is kept ready for a higher tier.
 """
 from __future__ import annotations
 
@@ -11,8 +15,8 @@ import time
 import pandas as pd
 import tushare as ts
 
-from ..config import tushare_token
-from ..paths import PARQUET_DIR, ensure_dirs
+from ...config import tushare_token
+from ...paths import PARQUET_DIR, ensure_dirs
 
 _PRO = None
 

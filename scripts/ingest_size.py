@@ -11,7 +11,7 @@ BaoStock (value/momentum/low-vol/reversal), which has no such limit.
 """
 import pandas as pd
 
-from hermes.data.tushare_source import pull_daily_basic
+from hermes.data.sources.tushare_source import pull_daily_basic
 from hermes.paths import RAW_DIR
 
 
