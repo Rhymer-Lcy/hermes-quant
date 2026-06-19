@@ -25,9 +25,16 @@ DEFAULT_PARAMS = dict(
 def build_dataset(factors: dict[str, pd.DataFrame], close: pd.DataFrame, eval_dates: list,
                   members_asof=None) -> tuple[pd.DataFrame, list[str]]:
     """Long table of (date, code) rows at `eval_dates`: standardized factor features +
-    `fwd_ret` (cross-sectionally demeaned next-period return). Returns (data, feature_cols)."""
-    feats = {k: fl.standardize(v.reindex(index=close.index, columns=close.columns))
-             for k, v in factors.items()}
+    `fwd_ret` (cross-sectionally demeaned next-period return). Returns (data, feature_cols).
+
+    PIT-correct: features are restricted to the then-current members BEFORE the
+    cross-sectional standardize() -- standardizing over the survivorship-defined union
+    would leak future membership into the z-scores (see factors.library.restrict_to_universe).
+    Aligned to the monthly `eval_dates` only (the rest of the panel is never used here)."""
+    aligned = {k: v.reindex(index=eval_dates, columns=close.columns) for k, v in factors.items()}
+    if members_asof is not None:
+        aligned = {k: fl.restrict_to_universe(v, members_asof) for k, v in aligned.items()}
+    feats = {k: fl.standardize(v) for k, v in aligned.items()}
     cols = list(feats)
     blocks = []
     for i in range(len(eval_dates) - 1):
