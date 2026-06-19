@@ -83,8 +83,9 @@ src/hermes/        importable package (src-layout, PyPA-recommended)
   live/            online: snapshot collector, idempotent ledger
   execution/       vnpy strategy adapters
 scripts/           runnable entrypoints & smoke tests
-data/              local data lake (gitignored)
+data/              local data lake — INPUTS (gitignored)
+results/           generated OUTPUTS: signals, backtests, figures, models (gitignored)
 external/          forks, pip install -e (gitignored)
-docs/              architecture & decisions
+docs/              architecture & decisions (tracked: curated findings)
 notebooks/         research scratch
 ```

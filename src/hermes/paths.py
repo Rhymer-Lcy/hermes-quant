@@ -23,7 +23,15 @@ EXTERNAL_DIR = REPO_ROOT / "external"   # editable-installed forks (vnpy, ...)
 NOTEBOOKS_DIR = REPO_ROOT / "notebooks"
 DOCS_DIR = REPO_ROOT / "docs"
 
-_RUNTIME_DIRS = [DATA_DIR, RAW_DIR, PARQUET_DIR, QLIB_BIN_DIR, CACHE_DIR, NOTEBOOKS_DIR]
+# --- generated OUTPUTS (gitignored; derived, regenerable from data + code) ---
+RESULTS_DIR = REPO_ROOT / "results"
+SIGNALS_DIR = RESULTS_DIR / "signals"      # prediction / signal panels (parquet)
+BACKTESTS_DIR = RESULTS_DIR / "backtests"  # equity curves, trade logs, metrics
+FIGURES_DIR = RESULTS_DIR / "figures"      # plots
+MODELS_DIR = RESULTS_DIR / "models"        # trained model dumps
+
+_RUNTIME_DIRS = [DATA_DIR, RAW_DIR, PARQUET_DIR, QLIB_BIN_DIR, CACHE_DIR, NOTEBOOKS_DIR,
+                 RESULTS_DIR, SIGNALS_DIR, BACKTESTS_DIR, FIGURES_DIR, MODELS_DIR]
 
 
 def ensure_dirs() -> None:

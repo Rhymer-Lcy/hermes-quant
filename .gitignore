@@ -4,6 +4,7 @@
 # local data lake & caches (large, regenerable) — anchored to repo root so the
 # `hermes/data/` source package is NOT ignored, only the top-level data lake.
 /data/
+/results/
 *.joblib
 *.parquet
 
