@@ -45,5 +45,6 @@ factors (momentum/reversal) into the model diluted the signal rather than improv
 
 Equal-weight top-10 is crude; 涨跌停 no-fill is not modeled in this engine (cross-checked
 via RQAlpha); costs ~ default 万2.5/万5; a single market regime/period; turnover is not
-penalized. Treat magnitudes as indicative, the RANKING (value > ML-stack > low-vol >
-momentum) as the robust takeaway.
+penalized; and size (market cap) is NOT yet in the evaluated set (ingestion deferred --
+Tushare rate limit). Treat magnitudes as indicative, the RANKING (value > ML-stack >
+low-vol > momentum) as the robust takeaway.

@@ -3,9 +3,10 @@
 A-share (大陆股市) quantitative research, backtesting, and paper-trading system.
 Codename **Hermes** — the Greek god of commerce and trade.
 
-> Status: scaffolding. The first milestone is a closed loop of
-> *BaoStock historical pull → friction-faithful backtest → local paper trading*,
-> built before any real-money execution.
+> Status: the research pipeline is built and cross-validated — BaoStock historical
+> pull → friction-faithful, point-in-time (survivorship-free) backtest → factor and
+> walk-forward ML evaluation, cross-checked against RQAlpha (see docs/). Next milestone:
+> local paper trading (hermes/live/ledger.py is still a skeleton) before any real money.
 
 ## Architecture
 

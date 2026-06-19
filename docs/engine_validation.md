@@ -14,10 +14,10 @@ differences isolate engine + price-data + corporate-action handling.
 | capital   | hand-rolled PIT CAGR | RQAlpha PIT CAGR |
 |----------:|---------------------:|-----------------:|
 | 100,000   | -7.0%                | -6.8%            |
-| 1,000,000 | -7.2%                | -5.2%            |
+| 1,000,000 | -8.0%                | -5.2%            |
 
 Two independent engines + two independent price datasets agree: survivorship-free
-naive 20-day momentum on HS300 loses ~5-7%/yr with catastrophic drawdowns (~75-88%).
+naive 20-day momentum on HS300 loses ~5-8%/yr with catastrophic drawdowns (~75-88%).
 
 Conclusions:
 1. The hand-rolled engine is **trustworthy** (within ~1-2pp CAGR of RQAlpha).
