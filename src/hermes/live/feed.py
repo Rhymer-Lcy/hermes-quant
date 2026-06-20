@@ -22,8 +22,8 @@ import baostock as bs
 import pandas as pd
 
 from ..data import ingest
-from ..data.membership import (MEMBERSHIP_PARQUET, UNION_CSV, _rs_to_df,
-                               month_end_trading_dates)
+from ..data.membership import (MEMBERSHIP_PARQUET, UNION_CSV,
+                               month_end_trading_dates, rs_to_df)
 from ..data.sources import baostock_source as bss
 from ..paths import RAW_DIR, ensure_dirs
 
@@ -53,7 +53,7 @@ def extend_membership(end: str | None = None) -> tuple[pd.DataFrame, list[str], 
             if last is not None and pd.Timestamp(d) <= last:
                 continue                                   # already stored
             new_dates.append(d)
-            snap = _rs_to_df(bs.query_hs300_stocks(date=d))
+            snap = rs_to_df(bs.query_hs300_stocks(date=d))
             rows.extend({"date": pd.Timestamp(d), "code": c} for c in snap["code"].tolist())
 
     new = pd.DataFrame(rows, columns=["date", "code"])

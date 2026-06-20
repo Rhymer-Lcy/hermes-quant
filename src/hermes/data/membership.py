@@ -8,6 +8,7 @@ set. `query_hs300_stocks(date)` returns the constituents effective on that date.
 from __future__ import annotations
 
 import bisect
+from typing import Any
 
 import baostock as bs
 import pandas as pd
@@ -20,7 +21,8 @@ MEMBERSHIP_PARQUET = PARQUET_DIR / "hs300_membership.parquet"
 UNION_CSV = RAW_DIR / "hs300_union.csv"
 
 
-def _rs_to_df(rs) -> pd.DataFrame:
+def rs_to_df(rs: Any) -> pd.DataFrame:
+    """Drain a BaoStock result set into a DataFrame. Public so the live feed can reuse it."""
     rows = []
     while rs.error_code == "0" and rs.next():
         rows.append(rs.get_row_data())
@@ -30,7 +32,7 @@ def _rs_to_df(rs) -> pd.DataFrame:
 def month_end_trading_dates(start: str, end: str) -> list[str]:
     """Last actual trading day of each month in [start, end]. Call inside session()."""
     rs = bs.query_trade_dates(start_date=start, end_date=end)
-    cal = _rs_to_df(rs)
+    cal = rs_to_df(rs)
     cal = cal[cal["is_trading_day"] == "1"].copy()
     cal["d"] = pd.to_datetime(cal["calendar_date"])
     last = cal.groupby(cal["d"].dt.to_period("M"))["calendar_date"].last()
@@ -46,7 +48,7 @@ def build_membership(start: str = BACKTEST_START, end: str = BACKTEST_END) -> tu
         dates = month_end_trading_dates(start, end)
         for d in dates:
             rs = bs.query_hs300_stocks(date=d)
-            df = _rs_to_df(rs)
+            df = rs_to_df(rs)
             for code in df["code"].tolist():
                 rows.append({"date": d, "code": code})
 
