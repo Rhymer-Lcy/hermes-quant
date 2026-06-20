@@ -8,7 +8,11 @@ from __future__ import annotations
 
 import pandas as pd
 
+from ..io import atomic_to_parquet
+from ..paths import PARQUET_DIR
+
 _FUTURES_NUM = ["open", "high", "low", "close", "volume", "hold"]
+INTRADAY_DIR = PARQUET_DIR / "intraday"
 
 
 def futures_minute(symbol: str, period: str = "5") -> pd.DataFrame:
@@ -24,6 +28,27 @@ def futures_minute(symbol: str, period: str = "5") -> pd.DataFrame:
     df["datetime"] = pd.to_datetime(df["datetime"])
     df[_FUTURES_NUM] = df[_FUTURES_NUM].apply(pd.to_numeric, errors="coerce")
     return df.set_index("datetime").sort_index()
+
+
+def accumulate_futures_minute(symbol: str = "IF0", periods: tuple[str, ...] = ("1", "5")) -> dict[str, int]:
+    """Pull the recent Sina minute window for `symbol` at each `period` and UNION it into a growing
+    parquet at data/parquet/intraday/<symbol>_<period>m.parquet. Sina only serves a shallow recent
+    window (~1023 bars), so a DAILY run accumulates history forward; overlapping windows dedupe on
+    `datetime` (idempotent -- safe to re-run / miss a day within the lookback). Returns {period: total_rows}.
+
+    Default 1m (finest; ~5-trading-day lookback so a daily job never gaps) + 5m (~22-day lookback, a
+    gap-robust backbone). Cheap: a few sub-second calls + small atomic writes -- negligible resources."""
+    INTRADAY_DIR.mkdir(parents=True, exist_ok=True)
+    totals: dict[str, int] = {}
+    for p in periods:
+        new = futures_minute(symbol, p).reset_index()          # datetime + OHLC/volume/hold
+        path = INTRADAY_DIR / f"{symbol}_{p}m.parquet"
+        if path.exists():
+            new = (pd.concat([pd.read_parquet(path), new])
+                   .drop_duplicates("datetime").sort_values("datetime").reset_index(drop=True))
+        atomic_to_parquet(new, path, index=False)
+        totals[p] = len(new)
+    return totals
 
 
 def cb_minute(symbol: str, period: str = "5") -> pd.DataFrame:
