@@ -1,0 +1,37 @@
+# Intraday / futures research line (`hermes.intraday`)
+
+A separate strategy domain from the monthly EOD equity book (different cadence, instruments,
+microstructure). Originally floated as a market hedge -- but A8 disproved index hedging, so this
+line stands on its own merits, NOT as a hedge. Mode: historical research + simulation only.
+
+## First probe — intraday IF (沪深300 股指期货) signals: NO edge (and data too shallow to conclude)
+
+Built 3 causal signals on IF minute bars (AKShare Sina, free): intraday time-series momentum,
+opening-range breakout (ORB), overnight-gap fade. Backtested long/short with IF frictions
+(commission ~0.115bps/side, slippage 1-2 ticks, ¥300/pt), full parameter sweep, NET and GROSS.
+
+**Verdict: no validated edge — do not trade any of them.** The only attractive results were bias:
+- **Gap "continuation" (Sharpe 6.5-7.6) was a look-ahead artifact** — a close-to-close P&L convention
+  let the first-bar trade mechanically capture the very overnight gap it conditioned on. Pricing the
+  entry from the achievable OPEN collapses it to Sharpe ~0 (±1-2%). (A latent first-bar pricing bug
+  the production engine must avoid.)
+- **ORB OR=2/60m (Sharpe 2.0) was a lone overfit spike** — a +1-bar execution delay collapses it from
+  160 trades/Sharpe 2.0 to 4 trades/Sharpe −0.9; neighbors flat/negative. Momentum was net-negative
+  almost everywhere.
+
+**The data is too shallow for ANY verdict:** Sina caps at ~1023 bars → 60m gives only ~255 daily
+observations over ~1 year (4 bars/session), 30m only ~128 days, over a single bull leg, on a
+roll-spliced IF0 continuous contract. This is a clean pipeline/feasibility probe, not evidence.
+
+### What this line actually needs first (data-depth gate)
+No intraday verdict is possible until ≥2-3 years of minute bars accumulate. Sina only serves a recent
+window, so the prerequisite is a **daily incremental pull that ACCUMULATES IF minute bars forward**
+into a parquet lake (plus optional fixed-quarterly-contract stitching for finer 5m resolution with
+documented roll gaps). Only after that: a **look-ahead-free minute engine** (`hermes.intraday.engine`)
+whose first-of-day entries are priced from the OPEN (never `close[t-1]` — the exact bug that faked
+Sharpe 7), with a built-in skeptic gauntlet (execution-delay test, split-half, open-vs-close pricing
+check, deflated-Sharpe / reality-check across the whole sweep) that refuses a verdict below a
+configured data-span minimum. **Engine and data depth before signals; the signals are not the deliverable.**
+
+Status: PARKED. Intraday IF research is not fruitful now and is data-gated for years. Resume only if
+the data-accumulation clock is started and intraday stays in scope.

@@ -206,15 +206,47 @@ To hedge a value-style drawdown you must hedge the STYLE (long cheap / short exp
 not the market -- a structurally different strategy, and A-share 融券 (securities lending) is costly,
 scarce, and constrained, so it is not a free lunch.
 
+## A9 — per-name stop-loss / take-profit: REJECTED
+
+The deployed book has no price stops; tested as an ablation (full daily-loop, no look-ahead, vs the
+no-stop baseline Calmar ~0.32 / maxDD −33%):
+
+| overlay        | best setting | ΔCalmar | maxDD effect |
+|----------------|-------------|--------:|--------------|
+| stop-loss      | −10/−15/−20/−25% | −0.085 to −0.106 (all negative) | none cut it; −15%/−20% **deepen** it (−6pp, −4pp) |
+| take-profit    | +15/+20/+30/+50% | +0.04 fragile | non-monotone, sign-flips across sub-periods |
+
+**Stops harm the strategy** -- they dump the oversold names a value/reversal book wants to KEEP (same
+class as A1 portfolio-timing). Take-profit's tiny bump is single-event (2015-08) regime luck that flips
+sign out-of-sample. **Keep the book as-is: no price stops, no take-profit.** (The catastrophe exits that
+DO belong -- delisting force-liquidation, ST filter -- are already in the engine.)
+
+## CSI500-native factors (follow-up to A6): a real signal, but unharvestable long-only
+
+Re-tested CSI500 with small-cap-NATIVE factors (not the HS300-tuned value). A genuine small-cap
+predictor cluster exists at the IC level -- **low turnover-volatility (turnstd20: mean IC +0.084,
+t=6.15, hit 74%, positive in every 2y sub-period)**, plus low-turnover / illiquidity / low-vol. But it
+is a **left-tail SHORT signal** (it flags names to AVOID): long-only it still backtests to Calmar ~0.20
+/ −44% with 0.75 correlation to the HS300 book (no diversification). It is only harvestable in a
+long-short book -- the same 融券-gated wall as A8. **Standalone long-only CSI500 stays rejected under
+any factor sophistication.**
+
+## Intraday IF (separate line): no edge, data-gated -- see [intraday.md](intraday.md)
+
+A first intraday IF-futures probe found no validated edge (the two positives were a look-ahead artifact
+and an overfit spike), and the free Sina minute history (~1yr) is too shallow for any verdict. Parked
+pending a multi-year data-accumulation effort. It is a *separate* strategy domain, not a drawdown lever.
+
 ### Where this leaves the drawdown
 
 **Every lever has now been tested -- selection (A3/A4/quality), weighting (A2), factor breadth (B),
-market timing (A1), universe (A6/A7), cadence (A7), and an index hedge (A8) -- and the deployed HS300
+market timing (A1), universe (A6/A7), cadence (A7), index hedge (A8), price stops/take-profit (A9),
+CSI500-native factors, and a first intraday line -- and they CONVERGE on one answer: the deployed HS300
 value + light 1-month-reversal, monthly, top-10 (Calmar ~0.32, maxDD −33%) is the best long-only
-configuration. The −33% is the INTRINSIC drawdown of a long-only A-share value strategy: it is
-value-style, not market-beta, so no selection trick or index hedge removes it.** The only structurally
-different option left is a true long-short value book (hedge the style), gated by costly/constrained
-A-share 融券. Absent that, the deployed strategy **accepts the −33% as the understood, intrinsic cost of
-harvesting the value premium long-only** -- and the honest takeaway is that the realistic improvement
-frontier for this account is operational (the running paper record) and capacity-aware, not another
-drawdown lever.
+A-share strategy reachable, and there is no new tradeable long-only edge to add.** The −33% is the
+INTRINSIC, value-style drawdown of harvesting the value premium long-only; no selection / weighting /
+universe / cadence / stop / index hedge removes it. The only structurally different option is a true
+long-short book (hedge the style / harvest the small-cap short signal), gated by costly, scarce,
+retail-infeasible A-share 融券. **The honest frontier for this account is now operational -- run the
+paper record forward to make the 0.32 Calmar credible out-of-sample -- and capacity-aware, not another
+drawdown lever.**
