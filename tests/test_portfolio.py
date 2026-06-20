@@ -4,7 +4,26 @@ import numpy as np
 import pandas as pd
 
 from hermes.research.backtest.frictions import ZERO_COSTS
-from hermes.research.backtest.portfolio import _select_top, signal_portfolio_backtest
+from hermes.research.backtest.portfolio import (_hold_value, _select_top,
+                                                signal_portfolio_backtest, valuation_panel)
+
+
+def test_valuation_panel_ffills_suspension_but_stops_after_delisting():
+    dates = pd.bdate_range("2020-01-01", periods=6)
+    price = pd.DataFrame(index=dates, dtype=float)
+    price["halt"] = [10.0, np.nan, np.nan, 13.0, 14.0, 15.0]   # interior suspension, resumes
+    price["dead"] = [20.0, 21.0, 22.0, np.nan, np.nan, np.nan]  # delists after bar 2
+    val, last_valid, last_price = valuation_panel(price)
+    # interior gap is forward-filled (carry last price through a halt)...
+    assert val.loc[dates[1], "halt"] == 10.0 and val.loc[dates[2], "halt"] == 10.0
+    # ...but a name is never valued past its final real bar.
+    assert np.isnan(val.loc[dates[3], "dead"]) and np.isnan(val.loc[dates[5], "dead"])
+    assert last_valid["dead"] == dates[2] and last_price["dead"] == 22.0
+
+
+def test_hold_value_ignores_nan_prices():
+    val = pd.Series({"a": 10.0, "b": np.nan})
+    assert _hold_value({"a": 100, "b": 200}, val) == 1000.0   # b (NaN price) contributes 0
 
 
 def test_delisted_holding_is_liquidated_and_capital_recycled():

@@ -65,3 +65,31 @@ def test_small_size_orientation_smaller_is_higher():
     cap = pd.DataFrame({"small": [1e9], "big": [1e12]})
     s = fl.small_size(cap)
     assert s.loc[0, "small"] > s.loc[0, "big"]         # smaller cap = more attractive
+
+
+def test_trailing_return_computes_ratio():
+    close = pd.DataFrame({"a": [10.0, 11.0, 12.0, 15.0]})
+    tr = fl.trailing_return(close, lookback=1)
+    assert math.isclose(tr.loc[1, "a"], 0.1)           # 11/10 - 1
+    assert math.isclose(tr.loc[3, "a"], 0.25)          # 15/12 - 1
+    assert np.isnan(tr.loc[0, "a"])                    # no prior bar
+
+
+def test_restrict_to_universe_empty_date_is_all_nan():
+    df = pd.DataFrame({"a": [1.0, 2.0], "b": [3.0, 4.0]}, index=pd.to_datetime(["2020-01-31", "2020-02-29"]))
+    members = {pd.Timestamp("2020-01-31"): {"a", "b"}}   # Feb has NO members
+
+    def asof(d):
+        return members.get(pd.Timestamp(d), set())
+
+    out = fl.restrict_to_universe(df, asof)
+    assert out.loc["2020-01-31"].notna().all()          # both kept in Jan
+    assert out.loc["2020-02-29"].isna().all()           # empty universe -> all NaN
+
+
+def test_blend_zero_weight_factor_is_ignored():
+    f1 = pd.DataFrame({"a": [1.0], "b": [2.0], "c": [3.0]})
+    f2 = pd.DataFrame({"a": [3.0], "b": [2.0], "c": [1.0]})   # opposite order
+    only_f1 = fl.blend([f1], [1.0])
+    with_zero = fl.blend([f1, f2], [1.0, 0.0])               # f2 at weight 0 must not affect
+    pd.testing.assert_frame_equal(with_zero, only_f1)
