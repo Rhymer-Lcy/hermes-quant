@@ -28,6 +28,18 @@ class DeployedStrategy:
 
 DEPLOYED = DeployedStrategy()
 
+# Paper-trading capital tiers (元), grouped small / medium / large (two each). The deployed
+# strategy needs ~>=3万 to hold a diversified 10-name book; 1万 is retained only to EXPOSE the
+# small-account friction (100-share lots + 5元 minimum commission), not as a viable size.
+# See docs/paper_trading.md.
+CAPITAL_TIERS: dict[str, list[int]] = {
+    "small": [10_000, 50_000],
+    "medium": [100_000, 500_000],
+    "large": [1_000_000, 5_000_000],
+}
+ALL_TIERS: list[int] = [v for tier in CAPITAL_TIERS.values() for v in tier]
+TIER_LABEL: dict[int, str] = {v: label for label, tier in CAPITAL_TIERS.items() for v in tier}
+
 
 def deployed_signal(close: pd.DataFrame, pe_ttm: pd.DataFrame, members_asof,
                     spec: DeployedStrategy = DEPLOYED) -> pd.DataFrame:

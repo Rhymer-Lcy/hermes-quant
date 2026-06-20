@@ -18,16 +18,14 @@ import argparse
 
 from hermes.live.feed import refresh
 from hermes.live.paper import live_step
-from hermes.live.strategy import DEPLOYED
-
-TIERS = [5_000, 10_000, 30_000, 100_000, 500_000]
+from hermes.live.strategy import ALL_TIERS, DEPLOYED, TIER_LABEL
 
 
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--no-refresh", action="store_true", help="skip the BaoStock data pull")
     ap.add_argument("--as-of", default=None, help="recompute through this date (YYYY-MM-DD)")
-    ap.add_argument("--tiers", type=int, nargs="*", default=TIERS, help="capital tiers (元)")
+    ap.add_argument("--tiers", type=int, nargs="*", default=ALL_TIERS, help="capital tiers (元)")
     args = ap.parse_args()
 
     if not args.no_refresh:
@@ -36,15 +34,15 @@ def main() -> None:
 
     print(f"\ndeployed = value + 1m-reversal {int(DEPLOYED.value_weight)}/"
           f"{int(DEPLOYED.reversal_weight)}, top{DEPLOYED.n_hold} monthly (PIT HS300, A-share frictions)")
-    print(f"  {'tier':>9} {'as_of':>12} {'equity':>14} {'totRet':>8} {'maxDD':>8} "
+    print(f"  {'band':>6} {'tier':>9} {'as_of':>12} {'equity':>14} {'totRet':>8} {'maxDD':>8} "
           f"{'avgN':>6} {'pos':>4} {'todayTrades':>12}")
     last_report = None
     for cap in args.tiers:
         r = live_step(cap, as_of=args.as_of)
         last_report = r
-        print(f"  {cap:>9,} {r['as_of']:>12} {r['equity']:>14,.0f} {r['total_return']:>+8.1%} "
-              f"{r['max_drawdown']:>8.1%} {r['avg_names_held']:>6.2f} {r['n_positions']:>4} "
-              f"{len(r['today_trades']):>12}")
+        print(f"  {TIER_LABEL.get(cap, '?'):>6} {cap:>9,} {r['as_of']:>12} {r['equity']:>14,.0f} "
+              f"{r['total_return']:>+8.1%} {r['max_drawdown']:>8.1%} {r['avg_names_held']:>6.2f} "
+              f"{r['n_positions']:>4} {len(r['today_trades']):>12}")
 
     if last_report and last_report["today_trades"]:
         print(f"\ntoday's fills @ {last_report['as_of']} (largest tier): rebalance executed")

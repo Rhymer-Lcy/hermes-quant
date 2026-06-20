@@ -18,9 +18,9 @@ import pandas as pd
 from hermes.data.lake import load_close_panel
 from hermes.data.membership import MEMBERSHIP_PARQUET, membership_lookup
 from hermes.live.paper import ledger_equity, replay
-from hermes.live.strategy import DEPLOYED, deployed_signal
+from hermes.live.strategy import ALL_TIERS, DEPLOYED, deployed_signal
 
-TIERS = [5_000, 10_000, 30_000, 100_000, 500_000]
+TIERS = ALL_TIERS
 N_HOLD = DEPLOYED.n_hold
 
 
