@@ -3,7 +3,7 @@
 Shows GROSS (frictionless) vs NET (A-share costs) so the small-account cost drag
 is explicit. MECHANISM demo only — a single-name MA crossover has no real edge.
 
-    python scripts/backtest_demo.py
+    python scripts/probes/backtest_demo.py
 """
 import pandas as pd
 

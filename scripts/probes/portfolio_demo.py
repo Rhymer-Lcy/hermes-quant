@@ -6,7 +6,7 @@ capital, because a 100-share lot of an HS300 name costs thousands of RMB while t
 per-name budget at 5k/10 is only a few hundred. Diversification is structurally
 impossible at the smallest accounts.
 
-    python scripts/portfolio_demo.py
+    python scripts/probes/portfolio_demo.py
 
 This is the NON-PIT baseline (current-membership universe). See portfolio_pit_demo.py
 for the canonical survivorship-free biased-vs-PIT study.

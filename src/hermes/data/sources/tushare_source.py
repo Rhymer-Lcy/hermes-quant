@@ -4,9 +4,10 @@ daily_basic by ts_code works on this token tier (by trade_date is rate-limited t
 1/min; fina_indicator is not permitted). These market-ratio fields are daily as-of
 values, so they are point-in-time without announcement-lag concerns.
 
-DEFERRED: a full-universe size pull is impractical on the current token tier
-(daily_basic ~1 call/min), so the size factor is NOT yet in the evaluated set
-(see scripts/ingest_size.py). The adapter is kept ready for a higher tier.
+RETIRED size path: the size factor was tested and REJECTED (A4 -- a size tilt deepens the
+drawdown; see docs/risk_control.md), and free-float cap now reconstructs from the BaoStock daily
+lake via fl.float_cap with NO Tushare pull. This adapter is therefore unused by the deployed
+pipeline and kept only as a reference for a possible higher Tushare tier; there is no size-pull script.
 """
 from __future__ import annotations
 

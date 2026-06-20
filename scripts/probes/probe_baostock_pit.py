@@ -4,7 +4,7 @@ If query_hs300_stocks(date) returns historical constituents and we can pull bars
 for names later removed/delisted, then BaoStock alone kills survivorship bias for
 free (no Tushare index_weight permission needed).
 
-    python scripts/probe_baostock_pit.py
+    python scripts/probes/probe_baostock_pit.py
 """
 import baostock as bs
 import pandas as pd

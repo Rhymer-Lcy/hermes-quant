@@ -9,6 +9,10 @@ the common 2015-2025 window. CSI500/combined runs use 涨跌停 ON + ST filtered
 treatment); HS300-alone is the deployed baseline (no limits -- they don't bind for large caps).
 
     python scripts/cadence_universe_study.py
+
+NOTE: PART 2 (combined universe) needs the CSI500 dataset, which was purged (rejected; see
+docs/risk_control.md A6/A7). Regenerate it first with `python scripts/build_csi500_dataset.py`
+(free, ~minutes via BaoStock); PART 1 (HS300 cadence) runs without it.
 """
 from collections import Counter
 

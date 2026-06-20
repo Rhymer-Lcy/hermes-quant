@@ -2,7 +2,7 @@
 
 Establishes ground truth before we build the point-in-time data layer on top of it.
 
-    python scripts/probe_tushare.py
+    python scripts/probes/probe_tushare.py
 """
 import tushare as ts
 

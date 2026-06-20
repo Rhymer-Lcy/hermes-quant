@@ -5,7 +5,7 @@ Establishes permission + rate-limit ground truth before building the factor laye
 Value factors (pe/pb/ps) are already in the BaoStock lake; Tushare adds size
 (total_mv) and quality (ROE).
 
-    python scripts/probe_tushare_fundamentals.py
+    python scripts/probes/probe_tushare_fundamentals.py
 """
 import time
 

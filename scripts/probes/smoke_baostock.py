@@ -1,7 +1,7 @@
 """Smoke test: verify the BaoStock data link end to end.
 
     conda activate hermes
-    python scripts/smoke_baostock.py
+    python scripts/probes/smoke_baostock.py
 """
 from hermes.data.sources import baostock_source as bss
 
