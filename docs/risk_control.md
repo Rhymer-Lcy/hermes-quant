@@ -182,12 +182,25 @@ it makes the drawdown WORSE at every ratio:
 
 **Diagnosis (the clean test):** the book's beta to HS300 is only **0.66** with **R² ≈ 0.49** -- it is
 LOW-beta (banks/defensive) and only half its variance is market-driven. A *perfect* beta-hedge leaves
-a residual whose maxDD is **−36.3%, WORSE than the unhedged −33.1%**. So the market beta *cushions* the
-drawdown rather than causing it: value's worst stretches partly coincide with the index RISING
-(growth-led rallies -- the same mechanism that sank A1 market-timing), so shorting the index ADDS losses
-there. An index short reduces *volatility* (minimized ~beta-neutral, 20.4%→16.5%) but cannot cut the
-*maximum drawdown*, which is a value-STYLE tail (the 2015 episode), not a beta event. (Aside: 1 IF ≈
-¥1.4M notional, so a clean hedge needs ≥~¥5M anyway -- small accounts can't.)
+a residual whose maxDD is **−36.3%, WORSE than the unhedged −33.1%** -- the market beta *cushions* the
+worst drawdown, it does not cause it.
+
+The two drawdown episodes make the mechanism precise (the loose version of this was wrong -- caught in
+adversarial review):
+  - The **unhedged −33% maxDD is the 2015 crash** (2015-07→08), where HS300 *fell* −22.5% alongside the
+    book (corr ~0.73). They crash TOGETHER, so a short hedge would actually have HELPED *this* window.
+  - The hedge nonetheless worsens the *overall* maxDD because shorting the index opens a NEW, deeper
+    drawdown in the **2020-2021** stretch, where the index was ~flat/up (+1.6%) while value lagged -- a
+    relative/style underperformance the short turns into an absolute loss.
+  - Decisive floor: even a costless **look-ahead oracle** that shorts only during the exact 2015 crash
+    cannot push maxDD below **~−31.3%** -- removing 2015 just promotes that 2020-2021 (index-flat)
+    drawdown to be the new maximum. No index short can touch a drawdown that happens with the index flat.
+
+So an index short reduces *volatility* (minimized ~beta-neutral, 20.4%→16.5%) but cannot cut the
+*maximum drawdown*, which is an **intrinsic value-STYLE tail**, not a beta event. (Aside: 1 IF ≈ ¥1.4M
+notional, so a clean hedge needs ≥~¥5M anyway -- small accounts can't.) Adversarial check: no realizable
+IF/IC/IH short -- any ratio, time-varying-beta, or regime/vol-conditional -- cuts the −33% without
+look-ahead; every tradeable ratio worsens it monotonically (h=0.5 −41.6%, h=1 −57.0%).
 
 To hedge a value-style drawdown you must hedge the STYLE (long cheap / short expensive = long-short),
 not the market -- a structurally different strategy, and A-share 融券 (securities lending) is costly,
