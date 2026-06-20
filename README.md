@@ -35,7 +35,7 @@ Three staged pipeline (a strategy only advances when the prior stage holds up):
    vnpy's default CTA backtester is futures-style and will *overstate* P&L at small
    accounts — never trust un-frictioned backtest returns.
 2. **Realtime paper trading** (模拟盘) at capital tiers grouped small/medium/large
-   (1万·5万 / 10万·50万 / 100万·500万). A monthly-rebalance strategy needs only an
+   (1万·3万·5万 / 10万·50万 / 100万·500万). A monthly-rebalance strategy needs only an
    end-of-day feed, so paper trading is a lightweight idempotent EOD ledger that replays
    the SAME research engine forward (no train/serve skew); see docs/paper_trading.md.
    The tiers are a config on one strategy object — and expose that the book is infeasible

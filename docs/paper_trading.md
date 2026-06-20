@@ -63,19 +63,24 @@ re-spells the 5:1 value/reversal blend, so they cannot diverge. `test_paper.py` 
 
 ## Capital tiers — the small-account problem is real
 
-`avg_names_held` (effective diversification) vs the 10-name target, deployed strategy, 2015-2025:
+`avg_names_held` (effective diversification) vs the 10-name target, deployed strategy,
+2015-01 → 2026-06 (net of A-share frictions; `strategy.CAPITAL_TIERS`):
 
-| tier (元) | avg names | total return | note |
-|----------:|----------:|-------------:|------|
-| 5,000     | 5.5       | +20%         | infeasible — 100-share lots + 5元 min commission |
-| 10,000    | 9.6       | +120%        | marginal |
-| 30,000    | 9.9       | +171%        | viable |
-| 100,000   | 9.9       | +187%        | viable |
-| 500,000   | 9.9       | +199%        | viable |
+| band   | tier (元) | avg names | total return | maxDD  | note |
+|--------|----------:|----------:|-------------:|-------:|------|
+| small  | 10,000    | 9.6       | +116%        | -28.5% | marginal — 5元 min commission + lot rounding drag CAGR ~3pp (≈7%/yr) |
+| small  | 30,000    | 9.9       | +164%        | -30.7% | viable floor |
+| small  | 50,000    | 9.9       | +173%        | -32.2% | viable |
+| medium | 100,000   | 9.9       | +181%        | -32.6% | working regime |
+| medium | 500,000   | 9.9       | +192%        | -33.0% | working regime |
+| large  | 1,000,000 | 9.9       | +193%        | -33.0% | saturated (capacity reference) |
+| large  | 5,000,000 | 9.9       | +194%        | -33.1% | saturated (capacity reference) |
 
-**Paper/live should start at ≥3万.** Below that, lot indivisibility and the 5元 minimum
-commission prevent a diversified 10-name book and materially reduce returns — exactly what tier-by-tier paper
-trading exists to expose before risking money.
+**Paper/live should start at ≥3万.** At 1万 the book is nearly full (9.6/10) but the 5元
+minimum commission + 100-share lot rounding drag the CAGR ~3pp (≈7% vs ≈10%); below ~5千 it
+cannot hold 10 names at all. The strategy saturates by ~10万 (the large tiers add no new
+behaviour and assume negligible, unmodeled market impact). Tier-by-tier paper trading exists
+to make this floor concrete before risking money.
 
 ## Operations
 

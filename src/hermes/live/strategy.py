@@ -28,12 +28,18 @@ class DeployedStrategy:
 
 DEPLOYED = DeployedStrategy()
 
-# Paper-trading capital tiers (元), grouped small / medium / large (two each). The deployed
-# strategy needs ~>=3万 to hold a diversified 10-name book; 1万 is retained only to EXPOSE the
-# small-account friction (100-share lots + 5元 minimum commission), not as a viable size.
-# See docs/paper_trading.md.
+# Paper-trading capital tiers (元), grouped small / medium / large. Chosen to be informative,
+# not round-number filler:
+#   small  [1万, 3万, 5万]  -- brackets the feasibility knee: 1万 is INFEASIBLE (100-share lots +
+#                            5元 min commission prevent a 10-name book), 3万 is the floor, 5万 is
+#                            comfortably viable. This is the research-critical band.
+#   medium [10万, 50万]     -- the working regime (book fully diversified).
+#   large  [100万, 500万]   -- capacity reference; the strategy SATURATES by ~10万 (these add no
+#                            new behaviour) and assumes negligible market impact -- true for HS300
+#                            large caps at <=50万/name, but NOT modeled (flat 5bps slippage, no
+#                            size-dependent impact term). Read them as "does it scale", not research.
 CAPITAL_TIERS: dict[str, list[int]] = {
-    "small": [10_000, 50_000],
+    "small": [10_000, 30_000, 50_000],
     "medium": [100_000, 500_000],
     "large": [1_000_000, 5_000_000],
 }
