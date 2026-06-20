@@ -169,7 +169,7 @@ mix; HS300-alone is best** (consistent with A6).
 
 ## A8 — IF index-futures short hedge: REJECTED (the −33% is value-style, not market-beta)
 
-The lever expected to be the one that could cut −33%: overlay a short 沪深300 股指期货 (IF) position
+The lever most likely to cut the −33% drawdown: overlay a short 沪深300 股指期货 (IF) position
 on the long book to neutralize market beta. Built faithfully (`research/backtest/hedge.py`: integer
 contracts, ¥300/pt, roll/basis carry swept 0-4%/yr; `scripts/hedge_study.py`). It does not work --
 it makes the drawdown worse at every ratio:
@@ -185,8 +185,8 @@ low-beta (banks/defensive) and only half its variance is market-driven. A *perfe
 a residual whose maxDD is **−36.3%, worse than the unhedged −33.1%** -- the market beta *cushions* the
 worst drawdown, it does not cause it.
 
-The two drawdown episodes make the mechanism precise (the loose version of this was wrong -- caught in
-adversarial review):
+The two drawdown episodes make the mechanism precise (an earlier, looser account was incorrect;
+corrected in adversarial review):
   - The **unhedged −33% maxDD is the 2015 crash** (2015-07→08), where HS300 *fell* −22.5% alongside the
     book (corr ~0.73). They crash together, so a short hedge would have helped *this* window.
   - The hedge nonetheless worsens the *overall* maxDD because shorting the index opens a new, deeper
@@ -204,7 +204,7 @@ look-ahead; every tradeable ratio worsens it monotonically (h=0.5 −41.6%, h=1 
 
 To hedge a value-style drawdown one must hedge the style (long cheap / short expensive = long-short),
 not the market -- a structurally different strategy, and A-share 融券 (securities lending) is costly,
-scarce, and constrained, so it is not a free lunch.
+scarce, and constrained, so it is not a costless option.
 
 ## A9 — per-name stop-loss / take-profit: REJECTED
 
