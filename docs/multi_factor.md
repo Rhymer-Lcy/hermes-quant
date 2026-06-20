@@ -52,7 +52,7 @@ Two results follow. First, a light reversal tilt (value ~80-90%) beats both the 
 baseline and A2, and the 4/1–9/1 region is a plateau (0.31-0.32), not a single point. Heavy
 reversal (50/50) is worse (0.24): too much of a high-turnover, low-return leg. Second, gross
 Calmar also rises (0.30 → 0.34), so the gain is genuine pre-cost alpha rather than luck
-surviving frictions -- the opposite of what the earlier version claimed.
+surviving frictions, contrary to the earlier version's conclusion.
 
 A 10-day reversal is stronger still (net 0.35 / gross 0.38), but selecting the exact
 window/weight on the same data is in-sample overfitting. Take val+rev1 5/1–7/1 (net 0.32)
