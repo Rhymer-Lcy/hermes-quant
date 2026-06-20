@@ -7,61 +7,60 @@ that exact strategy *forward* on fresh end-of-day data, at capital tiers, before
 
 ## Architecture — option A: lightweight EOD ledger
 
-A monthly-rebalance strategy does not need a tick/realtime gateway. The chosen design:
+A monthly-rebalance strategy does not require a tick/realtime gateway. The chosen design:
 
-> **The research backtest engine IS the strategy brain. Paper trading only *records* its
-> decisions.**
+> The research backtest engine is the strategy brain; paper trading only records its decisions.
 
 `live.paper.replay()` runs `signal_portfolio_backtest(..., collect_trades=True)` over the data
 available so far and folds its per-fill trade log, day by day, into an idempotent `LedgerState`
-(`live.ledger.fold_day`), valued with the SAME `valuation_panel` the engine uses. So paper P&L
-is the research engine's P&L **reconstructed from an immutable seed** — there is no second
-implementation of factors, selection, sizing, or valuation, hence no train/serve skew (the
-dominant silent alpha-killer). `scripts/paper_demo.py` **asserts** the ledger equity equals the
-engine equity bar-for-bar at every tier; if that gate ever fails, paper has drifted from research.
+(`live.ledger.fold_day`), valued with the same `valuation_panel` the engine uses. Paper P&L
+is therefore the research engine's P&L reconstructed from an immutable seed: there is no second
+implementation of factors, selection, sizing, or valuation, and hence no train/serve skew (the
+dominant silent source of alpha decay). `scripts/paper_demo.py` asserts that the ledger equity equals the
+engine equity bar-for-bar at every tier; if that gate fails, paper has drifted from research.
 
 Going forward is one daily step (`live.paper.live_step`): refresh the lake to today, recompute
-scores with the SAME factor code, replay → the ledger extends by the new day(s).
+scores with the same factor code, and replay, extending the ledger by the new day(s).
 
 ### One source of truth for the strategy
 
 The deployed spec lives in exactly one place, `live/strategy.py` (`DEPLOYED` +
-`deployed_signal`), and is imported by both the research demo and the live driver. Neither
+`deployed_signal`), imported by both the research demo and the live driver. Neither
 re-spells the 5:1 value/reversal blend, so they cannot diverge. `test_paper.py` locks
 `deployed_signal` to the documented blend.
 
 ## Forward-only rigor (things the backtest never had to face)
 
-1. **前复权 re-basing is not append-only.** Forward-adjusted prices rescale the *entire*
+1. **前复权 re-basing is not append-only.** Forward-adjusted prices rescale the entire
    history whenever a dividend/split occurs, so naively appending new days would mix two
-   adjustment bases in one series. `live.feed.update_daily_bars` therefore does a **full
-   re-pull** (overwrite) of the union over `[BACKTEST_START, today]`, putting the whole lake on
+   adjustment bases in one series. `live.feed.update_daily_bars` therefore performs a full
+   re-pull (overwrite) of the union over `[BACKTEST_START, today]`, putting the whole lake on
    one consistent basis; `replay` then recomputes the ledger wholesale from the seed, so the
    equity curve is always self-consistent and re-running a date reproduces it. 前复权 reinvests
-   dividends via the adjustment, so the paper curve approximates a **total-return** account.
+   dividends via the adjustment, so the paper curve approximates a total-return account.
    *Deferred refinement:* explicit corporate-action cash/tax accounting (dividend cash timing,
    dividend tax) — second-order for a monthly large-cap book, required before live.
 
 2. **Suspension vs delisting at the right edge.** The engine force-liquidates a holding once its
    price series permanently ends (NaN after `last_valid_index`). Forward, a name suspended for
-   the last few days looks the same as a delisting and may be liquidated early. For HS300 large
-   caps multi-day suspensions are rare and the effect is conservative (cash sits idle until the
-   next rebalance, never overstating return). A membership-aware rule (only liquidate when also
+   the last few days is indistinguishable from a delisting and may be liquidated early. For HS300 large
+   caps, multi-day suspensions are rare and the effect is conservative (cash sits idle until the
+   next rebalance, never overstating return). A membership-aware rule (liquidate only when also
    dropped from the index) is a documented future refinement.
 
-3. **Membership must keep current.** `live.feed.extend_membership` pulls HS300 month-end
-   snapshots *after* the last stored one and appends (never rebuilds), adding new entrants to the
-   union while preserving the survivorship-free history. New union names get pulled by the next
+3. **Membership must stay current.** `live.feed.extend_membership` pulls HS300 month-end
+   snapshots after the last stored one and appends (never rebuilds), adding new entrants to the
+   union while preserving the survivorship-free history. New union names are pulled by the next
    `update_daily_bars`.
 
 4. **Data-availability timing.** BaoStock publishes a day's EOD bar after close; run the driver
-   after ~15:30 CST on a trading day. A run before publication simply re-computes through the
+   after ~15:30 CST on a trading day. A run before publication re-computes through the
    last available bar (idempotent, harmless).
 
-5. **Execution model is preserved.** Signal read at the month-end close, executed at the **next**
+5. **Execution model is preserved.** The signal is read at the month-end close and executed at the next
    trading day's close, T+1, 100-share lots, full A-share frictions — identical to the backtest.
 
-## Capital tiers — the small-account problem is real
+## Capital tiers — the small-account constraint is material
 
 `avg_names_held` (effective diversification) vs the 10-name target, deployed strategy,
 2015-01 → 2026-06 (net of A-share frictions; `strategy.CAPITAL_TIERS`):
@@ -76,11 +75,11 @@ re-spells the 5:1 value/reversal blend, so they cannot diverge. `test_paper.py` 
 | large  | 1,000,000 | 9.9       | +193%        | -33.0% | saturated (capacity reference) |
 | large  | 5,000,000 | 9.9       | +194%        | -33.1% | saturated (capacity reference) |
 
-**Paper/live should start at ≥3万.** At 1万 the book is nearly full (9.6/10) but the 5元
-minimum commission + 100-share lot rounding drag the CAGR ~3pp (≈7% vs ≈10%); below ~5千 it
+Paper and live should start at ≥3万. At 1万 the book is nearly full (9.6/10), but the 5元
+minimum commission and 100-share lot rounding drag the CAGR ~3pp (≈7% vs ≈10%); below ~5千 it
 cannot hold 10 names at all. The strategy saturates by ~10万 (the large tiers add no new
 behaviour and assume negligible, unmodeled market impact). Tier-by-tier paper trading exists
-to make this floor concrete before risking money.
+to establish this floor concretely before capital is committed.
 
 ## Operations
 
@@ -91,7 +90,7 @@ python scripts/paper_live.py --as-of 2026-03-31 --no-refresh   # historical repl
 ```
 
 Outputs (gitignored) under `results/paper/`: `curve_<tier>.parquet`, `trades_<tier>.parquet`,
-`report_<tier>.json`, `logs/paper_<date>.log`. **Every run is idempotent** (recompute-from-seed),
+`report_<tier>.json`, `logs/paper_<date>.log`. Every run is idempotent (recompute-from-seed),
 so a missed or repeated day is harmless.
 
 Scheduling — use the wrapper `scripts/paper_live.ps1` (captures stdout/stderr to a timestamped
@@ -103,14 +102,14 @@ schtasks /Create /SC WEEKLY /D MON,TUE,WED,THU,FRI /ST 15:35 /TN hermes-paper ^
 ```
 
 ### Unattended-operation guardrails (so the auto-record can be trusted)
-- **Fail loud on a degraded pull**: `feed.update_daily_bars` raises (nonzero exit, NO report
+- **Fail loud on a degraded pull**: `feed.update_daily_bars` raises (nonzero exit, no report
   written) if the BaoStock pull falls below 98% OK — a partial outage would otherwise leave a
   mixed-前复权-basis lake; the next clean run re-pulls the whole union and self-heals.
 - **Fresh-vs-stale signal**: each report carries `run_date`, `lake_lag_days`, and `fresh`; a
   holiday/weekend/source-lag run (which idempotently re-computes the prior bar) prints a `STALE`
-  banner instead of masquerading as a fresh trading-day update.
+  banner rather than presenting itself as a fresh trading-day update.
 - **Atomic writes**: all parquet/JSON outputs (lake bars, membership, curves, reports) write to a
-  temp file then `os.replace()`, so a crash mid-write can never wedge later runs with a truncated file.
+  temp file then `os.replace()`, so a crash mid-write cannot wedge later runs with a truncated file.
 - **No spurious rebalance at the right edge**: the engine's `+1 < n` guard and the current-month
   membership exclusion mean a non-trading-day run never fires a rebalance (verified).
 

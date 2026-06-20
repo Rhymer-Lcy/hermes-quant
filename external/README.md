@@ -40,9 +40,10 @@ pip install -e external/vnpy_paperaccount
 pip install -e external/vnpy_xt
 ```
 
-## On the CLUSTER (Linux — V100×8, ML research only)
+## Deferred ML-research repos (not cloned on this PC)
 
-Not cloned on this PC. On the cluster:
+Clone these only if and when large-scale ML research is pursued, on whatever machine runs
+the training:
 
 ```bash
 git clone https://github.com/microsoft/qlib.git
