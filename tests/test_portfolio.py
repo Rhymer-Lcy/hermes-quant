@@ -26,6 +26,18 @@ def test_hold_value_ignores_nan_prices():
     assert _hold_value({"a": 100, "b": 200}, val) == 1000.0   # b (NaN price) contributes 0
 
 
+def test_rebalance_freq_changes_cadence_and_defaults_to_monthly():
+    dates = pd.bdate_range("2020-01-01", "2020-12-31")
+    price = pd.DataFrame({"a": np.linspace(10, 14, len(dates)),
+                          "b": np.linspace(20, 18, len(dates))}, index=dates)
+    signal = pd.DataFrame({"a": 2.0, "b": 1.0}, index=dates)
+    n = {f: signal_portfolio_backtest(price, signal, 1_000_000.0, 1, rebalance_freq=f).n_rebalances
+         for f in ("Q", "M", "W")}
+    assert n["Q"] < n["M"] < n["W"]                 # quarterly rebalances least, weekly most
+    default = signal_portfolio_backtest(price, signal, 1_000_000.0, 1).n_rebalances
+    assert default == n["M"]                        # default cadence is monthly
+
+
 def test_delisted_holding_is_liquidated_and_capital_recycled():
     dates = pd.bdate_range("2020-01-02", "2020-03-31")
     price = pd.DataFrame(index=dates, dtype=float)

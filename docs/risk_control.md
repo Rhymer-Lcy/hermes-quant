@@ -152,13 +152,29 @@ drawdowns (2015/2018 crashes) and lower risk-adjusted returns; more names re-sam
 Quality/diversification (which only cured concentration on HS300) make CSI500 worse still (-70%).
 **Verdict: stay on HS300; CSI500 expansion is rejected.**
 
+## A7 — rebalance cadence & combined universe: both confirm the deployed config
+
+Two axes flagged as untested (`scripts/cadence_universe_study.py`, HS300 value+rev, 2015-2025):
+
+**Cadence (top-10, deployed signal):** monthly is the peak at every tier. Quarterly cuts cost ~⅔
+(43 vs 131 rebalances) but CAGR drops more -- the 1-month reversal goes stale -- so Calmar is lower
+(0.21-0.23 vs monthly 0.26-0.32), *even at 1万* where cost matters most. Weekly churns (562
+rebalances, ~4× cost) for no gain (Calmar 0.04-0.27). **Monthly is optimal; the a-priori "quarterly
+helps small accounts" is refuted.**
+
+**Combined HS300 ∪ CSI500 (1552 names, monthly, 涨跌停 ON + ST filtered):** dilutes -- combined
+top-10 +2.1% / -60.2% / Calmar 0.03; top-30 +6.4% / -39.6% / 0.16; both far below HS300-alone
+(0.32). The value screen reaches into riskier small-cap deep-value, deepening drawdown. **Don't
+mix; HS300-alone is best** (consistent with A6).
+
 ### Where this leaves the drawdown
 
-**Six independent angles -- A1 (timing), A2 (weighting), B (factor breadth), A3 (sector), A4
-(size), A6 (wider universe) -- plus the quality/multi-factor study, all confirm the same thing:
-the deployed HS300 value + light-reversal book (Calmar ~0.32, maxDD −33%) is the best long-only
-A-share equity strategy reachable by selection / weighting / universe.** The −33% is systematic
-whole-market beta. **The ONE remaining lever that can actually cut it is a HEDGE OVERLAY**
-(short 股指期货 IF / index puts) -- a new instrument scope, which is exactly what the
-`hermes.intraday` futures line sets up (IF minute data is in hand). Until then the deployed
-strategy accepts the −33% as understood, bounded, systematic market risk.
+**Across selection (A3/A4/quality), weighting (A2), factor breadth (B), market timing (A1),
+universe (A6 CSI500, A7 combined), and cadence (A7 M/Q/W) -- the deployed HS300 value + light
+1-month-reversal, monthly, top-10 (Calmar ~0.32, maxDD −33%) is confirmed the best long-only
+A-share equity configuration.** The −33% is systematic whole-market beta. **The ONE remaining
+lever that can actually cut it is a HEDGE OVERLAY** (short 股指期货 IF / index puts) -- a new
+instrument scope, which is exactly what the `hermes.intraday` futures line sets up (IF minute
+data is in hand). The other genuinely-untested axis is **long-short** construction (also a
+structural change). Until then the deployed strategy accepts the −33% as understood, bounded,
+systematic market risk.

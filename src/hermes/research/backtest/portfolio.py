@@ -190,7 +190,8 @@ def execute_orders(cash: float, positions: dict[str, int], desired: dict[str, in
 def _score_backtest(price: pd.DataFrame, scores: pd.DataFrame, capital: float,
                     n_hold: int, costs: AShareCosts | None, members_asof,
                     exposure_asof=None, weight_asof=None, rebalance_band: int = 0,
-                    collect_trades: bool = False, limit_block: pd.DataFrame | None = None) -> PortfolioResult:
+                    collect_trades: bool = False, limit_block: pd.DataFrame | None = None,
+                    rebalance_freq: str = "M") -> PortfolioResult:
     """Engine: each month hold the top-`n_hold` names by `scores` (read at the month-end
     signal date, executed next trading day), with A-share frictions. Weighting is equal
     by default; `weight_asof` supplies an alternative intra-basket weighting (e.g.
@@ -206,10 +207,10 @@ def _score_backtest(price: pd.DataFrame, scores: pd.DataFrame, capital: float,
     dates = price.index
     n = len(dates)
 
-    periods = dates.to_period("M")
+    periods = dates.to_period(rebalance_freq)          # "M" monthly (default), "Q" quarterly, "W" weekly
     pos_of = {d: i for i, d in enumerate(dates)}
-    month_end = pd.Series(dates, index=dates).groupby(periods).max().tolist()
-    rebal_exec = {pos_of[sig] + 1: pos_of[sig] for sig in month_end if pos_of[sig] + 1 < n}
+    period_end = pd.Series(dates, index=dates).groupby(periods).max().tolist()
+    rebal_exec = {pos_of[sig] + 1: pos_of[sig] for sig in period_end if pos_of[sig] + 1 < n}
 
     cash = float(capital)
     positions: dict[str, int] = {}
@@ -300,7 +301,8 @@ def signal_portfolio_backtest(price: pd.DataFrame, signal: pd.DataFrame, capital
                               n_hold: int = 10, costs: AShareCosts | None = None,
                               members_asof=None, exposure_asof=None,
                               weight_asof=None, rebalance_band: int = 0,
-                              collect_trades: bool = False, limit_block: pd.DataFrame | None = None) -> PortfolioResult:
+                              collect_trades: bool = False, limit_block: pd.DataFrame | None = None,
+                              rebalance_freq: str = "M") -> PortfolioResult:
     """Top-N by an external `signal` panel (date x code), e.g. walk-forward ML
     out-of-sample predictions. `price` is the 前复权 close panel for exec/valuation.
     `exposure_asof`: optional callable(signal_date)->float in [0,1] scaling gross
@@ -313,4 +315,5 @@ def signal_portfolio_backtest(price: pd.DataFrame, signal: pd.DataFrame, capital
     blocks buys at the up-limit / sells at the down-limit on the exec day. OFF (None) by default
     -- liquid HS300 doesn't need it; supply it for the CSI500/small-cap universe."""
     return _score_backtest(price, signal, capital, n_hold, costs, members_asof,
-                           exposure_asof, weight_asof, rebalance_band, collect_trades, limit_block)
+                           exposure_asof, weight_asof, rebalance_band, collect_trades, limit_block,
+                           rebalance_freq)
