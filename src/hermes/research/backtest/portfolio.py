@@ -128,16 +128,24 @@ def target_shares(gross: float, weights: dict[str, float], scale: float,
 
 
 def execute_orders(cash: float, positions: dict[str, int], desired: dict[str, int],
-                   raw: pd.Series, costs: AShareCosts, slip: float, lot: int) -> tuple[float, float, list[dict]]:
+                   raw: pd.Series, costs: AShareCosts, slip: float, lot: int,
+                   block_buy: set | None = None, block_sell: set | None = None) -> tuple[float, float, list[dict]]:
     """Move `positions` toward `desired` shares: sells first (free up cash), then buys
     (capped by available cash, with a one-lot retry if fees tip it over). Mutates
     `positions` in place; returns (new_cash, cost_delta, fills). `cost_delta` is the sum of
-    slippage + fees; each fill is {code, shares (+buy/-sell), price (exec, incl. slippage), fee}."""
+    slippage + fees; each fill is {code, shares (+buy/-sell), price (exec, incl. slippage), fee}.
+
+    `block_buy`/`block_sell`: codes that CANNOT be bought / sold on the exec day (涨跌停 no-fill
+    -- a name locked limit-up has no sellers so a buy can't fill; locked limit-down, no buyers so
+    a sell can't fill). Both default to empty (no blocking) so the HS300 deployed path is unchanged;
+    populated only for the wider/small-cap universe where limits bind (see research.backtest.limits)."""
+    block_buy = block_buy or set()
+    block_sell = block_sell or set()
     cost_delta = 0.0
     fills: list[dict] = []
     for code, tgt in desired.items():                  # sells first
         cur = positions.get(code, 0)
-        if tgt >= cur:
+        if tgt >= cur or code in block_sell:           # limit-down: no buyers, can't sell
             continue
         p = raw.get(code, np.nan)
         if np.isnan(p):
@@ -154,7 +162,7 @@ def execute_orders(cash: float, positions: dict[str, int], desired: dict[str, in
         fills.append({"code": code, "shares": -qty, "price": ep, "fee": fee})
     for code, tgt in desired.items():                  # then buys (capped by cash)
         cur = positions.get(code, 0)
-        if tgt <= cur:
+        if tgt <= cur or code in block_buy:            # limit-up: no sellers, can't buy
             continue
         p = raw.get(code, np.nan)
         if np.isnan(p):
@@ -182,7 +190,7 @@ def execute_orders(cash: float, positions: dict[str, int], desired: dict[str, in
 def _score_backtest(price: pd.DataFrame, scores: pd.DataFrame, capital: float,
                     n_hold: int, costs: AShareCosts | None, members_asof,
                     exposure_asof=None, weight_asof=None, rebalance_band: int = 0,
-                    collect_trades: bool = False) -> PortfolioResult:
+                    collect_trades: bool = False, limit_block: pd.DataFrame | None = None) -> PortfolioResult:
     """Engine: each month hold the top-`n_hold` names by `scores` (read at the month-end
     signal date, executed next trading day), with A-share frictions. Weighting is equal
     by default; `weight_asof` supplies an alternative intra-basket weighting (e.g.
@@ -251,7 +259,13 @@ def _score_backtest(price: pd.DataFrame, scores: pd.DataFrame, capital: float,
                     desired = target_shares(gross, w, len(top) / n_hold, raw, slip, lot)
                     for code in list(positions.keys()):            # sell anything dropped from top
                         desired.setdefault(code, 0)
-                    cash, cost_delta, fills = execute_orders(cash, positions, desired, raw, costs, slip, lot)
+                    block_buy = block_sell = None
+                    if limit_block is not None and di in limit_block.index:
+                        fl = limit_block.loc[di]                    # 涨跌停 no-fill on the EXEC day
+                        block_buy = set(fl.index[fl == 1])
+                        block_sell = set(fl.index[fl == -1])
+                    cash, cost_delta, fills = execute_orders(cash, positions, desired, raw, costs,
+                                                             slip, lot, block_buy, block_sell)
                     total_costs += cost_delta
                     if collect_trades:
                         trades.extend({**fl, "date": di} for fl in fills)
@@ -286,7 +300,7 @@ def signal_portfolio_backtest(price: pd.DataFrame, signal: pd.DataFrame, capital
                               n_hold: int = 10, costs: AShareCosts | None = None,
                               members_asof=None, exposure_asof=None,
                               weight_asof=None, rebalance_band: int = 0,
-                              collect_trades: bool = False) -> PortfolioResult:
+                              collect_trades: bool = False, limit_block: pd.DataFrame | None = None) -> PortfolioResult:
     """Top-N by an external `signal` panel (date x code), e.g. walk-forward ML
     out-of-sample predictions. `price` is the 前复权 close panel for exec/valuation.
     `exposure_asof`: optional callable(signal_date)->float in [0,1] scaling gross
@@ -294,6 +308,9 @@ def signal_portfolio_backtest(price: pd.DataFrame, signal: pd.DataFrame, capital
     `weight_asof`: optional callable(signal_date, codes)->{code: weight} for intra-basket
     weighting (e.g. inverse-vol); equal weight if omitted.
     `rebalance_band`: turnover buffer (keep incumbents within top n_hold+band); 0 = off.
-    `collect_trades`: also return the per-fill audit log (consumed by live.paper)."""
+    `collect_trades`: also return the per-fill audit log (consumed by live.paper).
+    `limit_block`: optional (date x code) 涨跌停 flag panel (research.backtest.limits.limit_flags);
+    blocks buys at the up-limit / sells at the down-limit on the exec day. OFF (None) by default
+    -- liquid HS300 doesn't need it; supply it for the CSI500/small-cap universe."""
     return _score_backtest(price, signal, capital, n_hold, costs, members_asof,
-                           exposure_asof, weight_asof, rebalance_band, collect_trades)
+                           exposure_asof, weight_asof, rebalance_band, collect_trades, limit_block)
