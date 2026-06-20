@@ -32,7 +32,7 @@ factors (momentum/reversal) into the model diluted the signal rather than improv
 ## Lessons
 
 1. **The single value factor (earnings yield) is the strongest and lowest-drawdown, and
-   it beats the LightGBM combiner.** Complexity does not equal edge.
+   it beats the LightGBM combiner.** Added complexity did not improve the result.
 2. High IC does not imply high top-decile return. low_vol had the best IC but a flat
    backtest; its edge is risk-adjusted/full-distribution, not concentrated in the top
    names. ep had a lower IC but the best CAGR — value's payoff concentrates in the
@@ -47,6 +47,8 @@ factors (momentum/reversal) into the model diluted the signal rather than improv
 
 Equal-weight top-10 is crude; 涨跌停 no-fill is not modeled in this engine (cross-checked
 via RQAlpha); costs ~ default 万2.5/万5; a single market regime/period; turnover is not
-penalized; and size (market cap) is not yet in the evaluated set (ingestion deferred --
-Tushare rate limit). Treat magnitudes as indicative and the ranking (value > ML-stack >
+penalized; and size (market cap) is not in this single-factor set (it was reconstructed
+free from the lake and evaluated separately in [risk_control.md](risk_control.md) A4, and
+rejected — a size tilt deepens the drawdown). Treat magnitudes as indicative and the
+ranking (value > ML-stack >
 low-vol > momentum) as the robust takeaway.
