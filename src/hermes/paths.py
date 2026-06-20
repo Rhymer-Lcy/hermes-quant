@@ -29,9 +29,10 @@ SIGNALS_DIR = RESULTS_DIR / "signals"      # prediction / signal panels (parquet
 BACKTESTS_DIR = RESULTS_DIR / "backtests"  # equity curves, trade logs, metrics
 FIGURES_DIR = RESULTS_DIR / "figures"      # plots
 MODELS_DIR = RESULTS_DIR / "models"        # trained model dumps
+PAPER_DIR = RESULTS_DIR / "paper"          # paper-trading ledgers, daily reports, curves
 
 _RUNTIME_DIRS = [DATA_DIR, RAW_DIR, PARQUET_DIR, QLIB_BIN_DIR, CACHE_DIR, NOTEBOOKS_DIR,
-                 RESULTS_DIR, SIGNALS_DIR, BACKTESTS_DIR, FIGURES_DIR, MODELS_DIR]
+                 RESULTS_DIR, SIGNALS_DIR, BACKTESTS_DIR, FIGURES_DIR, MODELS_DIR, PAPER_DIR]
 
 
 def ensure_dirs() -> None:

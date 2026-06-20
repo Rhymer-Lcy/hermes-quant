@@ -1,10 +1,12 @@
 """Paper-trading ledger: idempotent folding + the anti-skew parity guarantee (the paper
-ledger must reproduce the research engine's equity exactly)."""
+ledger must reproduce the research engine's equity exactly), and the deployed-spec lock."""
 import numpy as np
 import pandas as pd
 
 from hermes.live.ledger import LedgerState, fold_day
 from hermes.live.paper import ledger_equity, replay
+from hermes.live.strategy import DEPLOYED, deployed_signal
+from hermes.research.factors import library as fl
 
 
 def test_fold_day_buy_then_sell_and_marks():
@@ -60,3 +62,25 @@ def test_replay_idempotent_rebuild():
     e1 = ledger_equity(replay(price, signal, 100_000.0, n_hold=1)[0])
     e2 = ledger_equity(replay(price, signal, 100_000.0, n_hold=1)[0])
     assert e1.equals(e2)
+
+
+def test_deployed_signal_is_the_documented_blend():
+    # Anti-skew lock: the single-source deployed_signal must equal the documented formula --
+    # value (1/PE) + 1m-reversal, restricted to PIT members BEFORE a 5:1 blend. If someone
+    # edits the spec, this test forces the docs/research to move with it.
+    dates = pd.bdate_range("2020-01-01", "2020-03-31")
+    n = len(dates)
+    close = pd.DataFrame({"a": np.linspace(10, 13, n), "b": np.linspace(20, 18, n),
+                          "c": np.linspace(30, 33, n)}, index=dates)
+    pe = pd.DataFrame({"a": 8.0, "b": 12.0, "c": 25.0}, index=dates)
+    members = {"a", "b", "c"}
+
+    def asof(_):
+        return members
+
+    got = deployed_signal(close, pe, asof)
+    ep = fl.restrict_to_universe(fl.earnings_yield(pe), asof)
+    rev = fl.restrict_to_universe(-fl.trailing_return(close, DEPLOYED.reversal_lookback), asof)
+    want = fl.blend([ep, rev], [DEPLOYED.value_weight, DEPLOYED.reversal_weight])
+    pd.testing.assert_frame_equal(got, want)
+    assert (DEPLOYED.n_hold, DEPLOYED.rebalance_band, DEPLOYED.weight_asof) == (10, 0, None)

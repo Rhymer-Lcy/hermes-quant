@@ -13,16 +13,15 @@ Two things this shows:
 
     python scripts/paper_demo.py
 """
-import numpy as np
 import pandas as pd
 
 from hermes.data.lake import load_close_panel
 from hermes.data.membership import MEMBERSHIP_PARQUET, membership_lookup
 from hermes.live.paper import ledger_equity, replay
-from hermes.research.factors import library as fl
+from hermes.live.strategy import DEPLOYED, deployed_signal
 
 TIERS = [5_000, 10_000, 30_000, 100_000, 500_000]
-N_HOLD = 10
+N_HOLD = DEPLOYED.n_hold
 
 
 def main() -> None:
@@ -31,11 +30,8 @@ def main() -> None:
     asof = membership_lookup(mdf)
 
     close = load_close_panel(codes=union, field="close")
-    ep = fl.earnings_yield(load_close_panel(codes=union, field="peTTM"))
-    rev1 = -fl.trailing_return(close, 20)
-    ep_pit = fl.restrict_to_universe(ep, asof)        # IRON RULE 1
-    rev1_pit = fl.restrict_to_universe(rev1, asof)
-    signal = fl.blend([ep_pit, rev1_pit], [5, 1])     # deployed: value + light 1m reversal
+    pe = load_close_panel(codes=union, field="peTTM")
+    signal = deployed_signal(close, pe, asof)         # SAME spec research and live share
 
     print(f"deployed = value + 1m-reversal 5/1, top{N_HOLD} monthly, PIT HS300, A-share frictions\n")
     print(f"  {'tier':>9} {'final equity':>14} {'totRet':>8} {'maxDD':>8} {'avgNames':>9} {'trades':>7} {'parity':>8}")
