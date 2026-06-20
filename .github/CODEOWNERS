@@ -1,0 +1,12 @@
+# Code owners for hermes-quant.
+#
+# The `*` pattern makes @Rhymer-Lcy the owner of every file, so every pull
+# request automatically requests review from the repo owner.
+#
+# To MAKE that review mandatory, enable in the branch ruleset:
+#   Settings → Rules → Rulesets → protect-main →
+#   "Require a pull request before merging" → "Require review from Code Owners"
+#
+# This file only takes effect once it lives on the default branch (main).
+
+* @Rhymer-Lcy
