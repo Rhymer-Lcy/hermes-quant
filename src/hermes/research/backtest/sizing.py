@@ -14,7 +14,7 @@ from __future__ import annotations
 import pandas as pd
 
 
-def _apply_cap(w: pd.Series, cap: float) -> pd.Series:
+def _apply_cap(w: pd.Series, cap: float | None) -> pd.Series:
     """Cap each weight at `cap`, spilling the excess onto the uncapped names pro-rata,
     iterating until no weight exceeds the cap (or the cap can no longer bind). Requires
     cap * n >= 1 to be feasible; otherwise returns the input unchanged."""

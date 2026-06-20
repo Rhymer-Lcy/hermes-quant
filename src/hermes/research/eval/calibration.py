@@ -14,16 +14,17 @@ array of integer class indices. For binary up/down use k=2.
 from __future__ import annotations
 
 import numpy as np
+import numpy.typing as npt
 
 
-def log_loss(p, y) -> float:
+def log_loss(p: npt.ArrayLike, y: npt.ArrayLike) -> float:
     p = np.asarray(p, dtype=np.float64)
     y = np.asarray(y)
     idx = np.arange(len(y))
     return float(-np.mean(np.log(np.clip(p[idx, y], 1e-15, 1.0))))
 
 
-def brier(p, y) -> float:
+def brier(p: npt.ArrayLike, y: npt.ArrayLike) -> float:
     p = np.asarray(p, dtype=np.float64)
     y = np.asarray(y)
     oh = np.zeros_like(p)
@@ -31,7 +32,8 @@ def brier(p, y) -> float:
     return float(np.mean(((p - oh) ** 2).sum(axis=1)))
 
 
-def reliability(p, y, n_bins: int = 10):
+def reliability(p: npt.ArrayLike, y: npt.ArrayLike, n_bins: int = 10
+                ) -> tuple[float, list[tuple[float, float, int, float, float]]]:
     """Bin by the predicted (argmax) confidence; compare predicted vs empirical.
 
     Returns (ece, rows) where each row is (lo, hi, n, predicted, empirical).

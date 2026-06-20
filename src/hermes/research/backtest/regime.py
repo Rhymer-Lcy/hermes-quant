@@ -6,6 +6,8 @@ sidesteps the worst of those drawdowns at the cost of some upside and some whips
 """
 from __future__ import annotations
 
+from typing import Any, Callable
+
 import pandas as pd
 
 
@@ -18,7 +20,7 @@ def trend_exposure(index_close: pd.Series, ma_window: int = 200) -> pd.Series:
     return (index_close >= ma).astype(float).where(ma.notna())
 
 
-def exposure_lookup(exposure: pd.Series):
+def exposure_lookup(exposure: pd.Series) -> Callable[[Any], float]:
     """f(date) -> exposure as of the latest available date <= the query date; defaults
     to 1.0 (no filter) before the series starts / during the MA warm-up."""
     exp = exposure.dropna().sort_index()

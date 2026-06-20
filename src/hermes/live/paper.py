@@ -16,7 +16,6 @@ or true-live use; a monthly rebalance does not need them.
 from __future__ import annotations
 
 import json
-from datetime import date
 
 import pandas as pd
 

@@ -11,6 +11,7 @@ DEFERRED: a full-universe size pull is impractical on the current token tier
 from __future__ import annotations
 
 import time
+from typing import Any
 
 import pandas as pd
 import tushare as ts
@@ -21,7 +22,7 @@ from ...paths import PARQUET_DIR, ensure_dirs
 _PRO = None
 
 
-def _api():
+def _api() -> Any:
     global _PRO
     if _PRO is None:
         ts.set_token(tushare_token())
