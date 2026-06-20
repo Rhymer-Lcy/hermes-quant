@@ -147,7 +147,7 @@ tzdata==2026.2
 tzlocal==5.4.3
 uri-template==1.3.0
 urllib3==2.7.0
--e git+https://github.com/Rhymer-Lcy/vnpy.git@1b78494979deb4c4996f6b864f234d9839f2f239#egg=vnpy
+-e git+https://github.com/vnpy/vnpy.git@1b78494979deb4c4996f6b864f234d9839f2f239#egg=vnpy
 wcwidth==0.8.1
 webcolors==25.10.0
 webencodings==0.5.1

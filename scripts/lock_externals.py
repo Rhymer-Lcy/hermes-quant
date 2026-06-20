@@ -24,7 +24,7 @@ def _git(repo, *args: str) -> str:
 def main() -> None:
     lines = [
         "# external/versions.lock -- pinned commit of each editable fork in external/.",
-        "# Reproduce: clone the fork, `git checkout <commit>`, `pip install -e external/<name>`.",
+        "# Reproduce: clone the upstream repo, `git checkout <commit>`, `pip install -e external/<name>`.",
         "# Regenerate with: python scripts/lock_externals.py",
         "",
     ]
