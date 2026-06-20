@@ -87,9 +87,14 @@ diversification) and the turnover buffer should stay off.
 
 **But the -33% drawdown is NOT cured.** Every variant sits at maxDD -32.8% to -33.8%; the
 Calmar gain is entirely CAGR (~+1pp). The systematic, whole-market drawdown is unchanged --
-consistent with A1 and A2. Cutting *that* needs levers not yet tried, all requiring new data
-ingestion: **sector/industry neutralization**, the **deferred size factor**, and a **wider
-universe (CSI 500/1000)** with more uncorrelated names. That is the next research step.
+consistent with A1 and A2. The two selection-side levers this flagged as "next" were then
+tested and **both FAILED**: **sector/industry neutralization** (A3) and a **size tilt** (A4)
+each *deepen* the drawdown monotonically (see [docs/risk_control.md](risk_control.md)) -- value
+in HS300 IS the bank trade, and that concentration is the strategy's residual *defensiveness*.
+The only equity lever left is a **wider universe (CSI 500** -- free + PIT via BaoStock; CSI
+1000 is not in BaoStock**)**, rated low-odds and gated on modeling 涨跌停 no-fill first. Truly
+cutting −33% (not re-sampling the same beta) realistically needs a **hedge overlay** -- a new
+scope. The base strategy accepts −33% as understood systematic market risk.
 
 ## The mistake this caught (the real lesson)
 

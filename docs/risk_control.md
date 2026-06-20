@@ -77,5 +77,66 @@ smaller caps) or a non-naive hedge -- not a position-level tweak. → next is **
 diversification *did* raise Calmar (a light 1-month-reversal tilt, 0.28 → 0.32, above A2's
 0.30, with gross/zero-cost Calmar rising too, so it is real alpha) -- but **maxDD stayed
 ~−33%**. Breadth helped the numerator (return), not the drawdown, confirming yet again that
-−33% is systematic. Cutting the drawdown itself still needs the *universe* dimension
-(CSI 500/1000), sector-neutralization, or the deferred size factor -- all pending new data.
+−33% is systematic. The two remaining *selection-side* levers were then tested and both
+FAILED (A3, A4 below); only the *universe* dimension (CSI 500) is left untried.
+
+## A3 — sector / industry neutralization: FAILED (counterproductive)
+
+Premise (correct): the value top-10 is brutally sector-concentrated -- ~70% banks (申万
+J-financials) plus real-estate and construction. So "diversify across sectors to cut the
+correlated drawdown" looks reasonable. Tested two ways on PIT HS300 (top-10 monthly, A-share
+frictions, 1M): full within-sector demean of the value score, and a per-sector name cap.
+
+| variant                     | CAGR  | maxDD  | Calmar |
+|-----------------------------|------:|-------:|-------:|
+| value (base)                | +9.5% | -33.6% | 0.28   |
+| value, full sector-demean   | +0.3% | -58.1% | 0.01   |
+| value, per-sector cap 5     | +8.1% | -39.4% | 0.21   |
+| value, per-sector cap 4     | +7.8% | -41.9% | 0.19   |
+| value, per-sector cap 3     | +7.5% | -45.1% | 0.17   |
+| value, per-sector cap 2     | +6.2% | -50.9% | 0.12   |
+
+**Every degree of sector diversification makes the drawdown WORSE, monotonically** (the full
+curve was swept -- IRON RULE 2). Why: A-share banks trade ~4× cheaper on earnings yield than
+everything else *and* are the lowest-vol, most defensive cluster in HS300, so the value
+factor essentially *is* the bank trade, and that concentration is the **source of the
+strategy's residual defensiveness**, not the source of the −33%. Forcing money out of banks
+injects higher-beta non-financial names that fall harder in a whole-market selloff. Note this
+test used the *latest* Shenwan snapshot on all dates -- a mild look-ahead *in neutralization's
+favour* -- and it still fails, so the null is robust. (`baostock_source.stock_industry` is
+free and PIT-capable; kept for sector *attribution*, not as an alpha lever. Repro:
+`scripts/a3_sector_demo.py`.)
+
+## A4 — size tilt (small-cap): FAILED (counterproductive)
+
+Free-float cap reconstructs from the existing daily lake with no Tushare pull --
+`float_cap = amount / (turn/100)` (BaoStock `turn` is the free-float turnover rate), 97.7%
+bar coverage, validated against known mega-caps (600519 ≈ 1.73万亿). So the old "size is
+blocked on a rate-limited Tushare tier" caveat is moot; the factor is now testable. Swept
+value:size at PIT HS300 (top-10 monthly, frictions, 1M; full curve -- IRON RULE 2):
+
+| variant        | CAGR  | maxDD  | net Calmar | gross Calmar |
+|----------------|------:|-------:|-----------:|-------------:|
+| value (base)   | +9.5% | -33.6% | 0.28       | 0.30         |
+| value + 0.2·size | +8.8% | -36.2% | 0.24     | 0.26         |
+| value + 0.3·size | +8.7% | -34.8% | 0.25     | 0.27         |
+| value + 0.5·size | +7.3% | -41.5% | 0.18     | 0.19         |
+| size only      | -6.4% | -85.1% | -0.08      | -0.07        |
+
+**Every size weight lowers CAGR and deepens maxDD; size-only is an −85% catastrophe** (and
+worse at every capital tier). Within HS300 the universe is all large caps, so a "small" name
+is a *demoted / falling-knife* blue-chip (distress beta), not the small-cap premium -- and it
+co-moves with the market (corr(small, large) ≈ 0.76), adding no uncorrelated return. Same
+verdict as A1/A2/A3/B. (Repro: `scripts/a4_size_demo.py`.)
+
+### Where this leaves the drawdown
+
+Five independent angles -- A1 (timing), A2 (weighting), B (factor breadth), A3 (sector), A4
+(size) -- all confirm the **−33% is systematic whole-market beta that no selection/weighting
+lever inside the HS300 large-cap universe can cut**. The only equity lever left untested is
+the **universe** itself (CSI 500 PIT membership is free + date-aware via BaoStock
+`query_zz500_stocks`); even that is rated low-odds (A-share mid/small-caps drew down *harder*
+in 2015/2018) and would first require modeling 涨跌停 no-fill. Genuinely *cutting* −33% (vs
+re-sampling the same beta) realistically needs a **hedge overlay** (index-futures short / puts)
+-- a new instrument scope. The deployed strategy (value + light reversal + inverse-vol,
+Calmar ~0.32) accepts the −33% as understood, bounded, systematic market risk.
