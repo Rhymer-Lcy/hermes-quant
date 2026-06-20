@@ -1,0 +1,96 @@
+# Paper trading (the second workflow stage: backtest → **paper** → small live)
+
+The research stage closed with a deployable strategy whose risk is understood (value + a light
+1-month-reversal tilt, net Calmar ~0.32, maxDD −33% systematic; see
+[multi_factor.md](multi_factor.md) / [risk_control.md](risk_control.md)). Paper trading runs
+that exact strategy *forward* on fresh end-of-day data, at capital tiers, before any real money.
+
+## Architecture — option A: lightweight EOD ledger
+
+A monthly-rebalance strategy does not need a tick/realtime gateway. The chosen design:
+
+> **The research backtest engine IS the strategy brain. Paper trading only *records* its
+> decisions.**
+
+`live.paper.replay()` runs `signal_portfolio_backtest(..., collect_trades=True)` over the data
+available so far and folds its per-fill trade log, day by day, into an idempotent `LedgerState`
+(`live.ledger.fold_day`), valued with the SAME `valuation_panel` the engine uses. So paper P&L
+is the research engine's P&L **reconstructed from an immutable seed** — there is no second
+implementation of factors, selection, sizing, or valuation, hence no train/serve skew (the
+dominant silent alpha-killer). `scripts/paper_demo.py` **asserts** the ledger equity equals the
+engine equity bar-for-bar at every tier; if that gate ever fails, paper has drifted from research.
+
+Going forward is one daily step (`live.paper.live_step`): refresh the lake to today, recompute
+scores with the SAME factor code, replay → the ledger extends by the new day(s).
+
+### One source of truth for the strategy
+
+The deployed spec lives in exactly one place, `live/strategy.py` (`DEPLOYED` +
+`deployed_signal`), and is imported by both the research demo and the live driver. Neither
+re-spells the 5:1 value/reversal blend, so they cannot diverge. `test_paper.py` locks
+`deployed_signal` to the documented blend.
+
+## Forward-only rigor (things the backtest never had to face)
+
+1. **前复权 re-basing is not append-only.** Forward-adjusted prices rescale the *entire*
+   history whenever a dividend/split occurs, so naively appending new days would mix two
+   adjustment bases in one series. `live.feed.update_daily_bars` therefore does a **full
+   re-pull** (overwrite) of the union over `[BACKTEST_START, today]`, putting the whole lake on
+   one consistent basis; `replay` then recomputes the ledger wholesale from the seed, so the
+   equity curve is always self-consistent and re-running a date reproduces it. 前复权 reinvests
+   dividends via the adjustment, so the paper curve approximates a **total-return** account.
+   *Deferred refinement:* explicit corporate-action cash/tax accounting (dividend cash timing,
+   dividend tax) — second-order for a monthly large-cap book, required before live.
+
+2. **Suspension vs delisting at the right edge.** The engine force-liquidates a holding once its
+   price series permanently ends (NaN after `last_valid_index`). Forward, a name suspended for
+   the last few days looks the same as a delisting and may be liquidated early. For HS300 large
+   caps multi-day suspensions are rare and the effect is conservative (cash sits idle until the
+   next rebalance, never overstating return). A membership-aware rule (only liquidate when also
+   dropped from the index) is a documented future refinement.
+
+3. **Membership must keep current.** `live.feed.extend_membership` pulls HS300 month-end
+   snapshots *after* the last stored one and appends (never rebuilds), adding new entrants to the
+   union while preserving the survivorship-free history. New union names get pulled by the next
+   `update_daily_bars`.
+
+4. **Data-availability timing.** BaoStock publishes a day's EOD bar after close; run the driver
+   after ~15:30 CST on a trading day. A run before publication simply re-computes through the
+   last available bar (idempotent, harmless).
+
+5. **Execution model is preserved.** Signal read at the month-end close, executed at the **next**
+   trading day's close, T+1, 100-share lots, full A-share frictions — identical to the backtest.
+
+## Capital tiers — the small-account problem is real
+
+`avg_names_held` (effective diversification) vs the 10-name target, deployed strategy, 2015-2025:
+
+| tier (元) | avg names | total return | note |
+|----------:|----------:|-------------:|------|
+| 5,000     | 5.5       | +20%         | infeasible — 100-share lots + 5元 min commission |
+| 10,000    | 9.6       | +120%        | marginal |
+| 30,000    | 9.9       | +171%        | viable |
+| 100,000   | 9.9       | +187%        | viable |
+| 500,000   | 9.9       | +199%        | viable |
+
+**Paper/live should start at ≥3万.** Below that, lot indivisibility and the 5元 minimum
+commission prevent a diversified 10-name book and gut returns — exactly what tier-by-tier paper
+trading exists to expose before risking money.
+
+## Operations
+
+```
+python scripts/paper_live.py                # refresh to today, step all tiers, report + persist
+python scripts/paper_live.py --no-refresh    # recompute on the current lake (monitoring)
+python scripts/paper_live.py --as-of 2026-03-31 --no-refresh   # historical replay to a date
+```
+
+Outputs (gitignored) under `results/paper/`: `curve_<tier>.parquet`, `trades_<tier>.parquet`,
+`report_<tier>.json`. **Every run is idempotent** (recompute-from-seed), so a missed or repeated
+day is harmless. Schedule daily ~15:35 CST via Windows Task Scheduler or the `/schedule` skill.
+
+## Deferred (not in this stage)
+
+Corporate-action cash accounting (see above); 涨跌停 no-fill in the engine (justified for liquid
+HS300; needed for a CSI500 universe — see risk_control.md); the vnpy realtime gateway /
+`vnpy_paperaccount` path (`execution/`), reserved for higher-frequency or true-live execution.
