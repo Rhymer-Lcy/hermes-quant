@@ -77,6 +77,38 @@ the cheapest names; hysteresis strands capital in names that became dear), not a
 lot-rounding effect. The mechanism is retained (correct, off by default) for genuinely
 high-turnover signals; it is the application to value/reversal that fails.
 
+## Quality + broad diversification on HS300: cures concentration, costs return (rejected here)
+
+A natural worry: the value top-10 is ~70% banks (HHI 0.60), so it is an unintended single-sector
+bet. Does adding a **quality factor (ROE)** and **diversifying across factors** fix that? ROE is
+reconstructed free from the lake as `pbMRQ/peTTM` (E/B; validated 600519≈35%, 601398≈10%). Swept on
+HS300, top-10 monthly, 1M, net & gross, measuring sector concentration (`scripts/quality_multifactor_demo.py`):
+
+| config                    | net Calmar | gross Calmar | maxDD  | sector HHI | max sector |
+|---------------------------|-----------:|-------------:|-------:|-----------:|-----------:|
+| value (base)              | 0.26       | 0.27         | -33.6% | 0.60       | 71% |
+| **value + rev 5/1 (deployed)** | **0.30** | **0.32**  | -33.0% | 0.58       | 70% |
+| value + quality 2/1       | 0.11       | 0.12         | -46.1% | 0.43       | 57% |
+| value + quality 1/1       | 0.03       | 0.03         | -64.9% | 0.26       | 39% |
+| val + qual + rev 3/2/1    | 0.12       | 0.16         | -38.3% | 0.33       | 46% |
+| 5-factor equal (ep,roe,rev,mom,lowvol) | 0.20 | 0.25    | -41.2% | 0.37       | 51% |
+
+**Diversification works on concentration (HHI 0.60 → 0.33, max-sector 71% → 46%) but is
+counterproductive on every return/risk axis** -- net AND gross Calmar fall (0.30 → 0.11-0.20) and
+maxDD *deepens* (-33% → -38% to -65%). The gross collapse means it is genuine signal degradation,
+not a friction artifact. This is the **third independent confirmation** (after A3 sector-neutral,
+A4 size) that **in HS300 the cheap-bank concentration is load-bearing** -- it is the source of both
+the return and the residual defensiveness. ROE in HS300 tilts toward expensive growth (酒/科技 at
+high multiples) that drew down harder over 2015-2026. **Verdict: keep the deployed HS300 config at
+value + light reversal; do NOT add quality / broad diversification / sector-spread here.**
+
+**Crucial scope note:** this null is SPECIFIC to HS300 (a large-cap, financials-heavy index where
+value ≈ banks). On a **wider CSI500 universe**, value is not a bank bet and there is real
+cross-sector breadth to harvest -- so quality (quality-value avoids cheap-for-a-reason traps),
+factor diversification, and sector-relative selection should be RE-EVALUATED there, and are the
+substance of the CSI500 line. The improvement to the *main* approach is the **universe**, not
+factor-stuffing within HS300.
+
 ## Conclusion
 
 **B succeeds on risk-adjusted return:** a modest reversal tilt (value ~85% / reversal ~15%)

@@ -108,6 +108,17 @@ def book_yield(pb: pd.DataFrame) -> pd.DataFrame:
     return (1.0 / pb).where(pb > 0)
 
 
+def roe(pe_ttm: pd.DataFrame, pb_mrq: pd.DataFrame) -> pd.DataFrame:
+    """Quality factor: return on equity, reconstructed from the daily lake as
+    E/B = (P/B)/(P/E) = pbMRQ / peTTM -- no fundamental pull needed, and PIT-clean (both are
+    daily as-of ratios). Higher = more profitable per unit book = higher quality. Non-positive
+    PE or PB -> NaN (loss-makers / negative book excluded, as a quality factor should). It mixes
+    TTM earnings with MRQ book, so it is a cross-sectional quality RANK, not an exact accounting
+    ROE (validated: 600519≈35%, 601398≈10%, weaker banks ~7%). Pairs with value to screen out the
+    'cheap for a reason' value traps that pure 1/PE piles into (e.g. low-ROE distressed names)."""
+    return (pb_mrq / pe_ttm).where((pe_ttm > 0) & (pb_mrq > 0))
+
+
 def float_cap(amount: pd.DataFrame, turn_pct: pd.DataFrame) -> pd.DataFrame:
     """Free-float market cap (元), reconstructed from the daily lake -- no Tushare needed.
 

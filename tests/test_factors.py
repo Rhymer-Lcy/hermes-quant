@@ -67,6 +67,15 @@ def test_small_size_orientation_smaller_is_higher():
     assert s.loc[0, "small"] > s.loc[0, "big"]         # smaller cap = more attractive
 
 
+def test_roe_quality_orientation_and_nonpositive_guard():
+    pe = pd.DataFrame({"hi": [10.0], "lo": [10.0], "loss": [-5.0], "negbook": [10.0]})
+    pb = pd.DataFrame({"hi": [3.0], "lo": [1.0], "loss": [2.0], "negbook": [-1.0]})
+    r = fl.roe(pe, pb)                                  # ROE = pb/pe where pe>0 & pb>0
+    assert math.isclose(r.loc[0, "hi"], 0.3) and math.isclose(r.loc[0, "lo"], 0.1)
+    assert r.loc[0, "hi"] > r.loc[0, "lo"]              # higher pb/pe = higher quality
+    assert np.isnan(r.loc[0, "loss"]) and np.isnan(r.loc[0, "negbook"])   # loss / negative book -> NaN
+
+
 def test_trailing_return_computes_ratio():
     close = pd.DataFrame({"a": [10.0, 11.0, 12.0, 15.0]})
     tr = fl.trailing_return(close, lookback=1)
