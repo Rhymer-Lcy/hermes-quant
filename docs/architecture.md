@@ -1,13 +1,13 @@
 # Architecture & stack decisions
 
-Captured from the evaluation that produced this project. Read this before changing the
-stack — the constraints are non-obvious and load-bearing.
+Captured from the evaluation that produced this project; review before changing the
+stack, as several of the constraints are non-obvious.
 
-## Verdict: vnpy + Qlib, with changes
+## Selected stack: vnpy + Qlib, with changes
 
-No single open-source project does research-grade A-share backtesting **and** retail
-A-share live execution well, so a best-of-breed split is unavoidable. vnpy + Qlib is the
-strongest pairing, but neither is turnkey:
+No single open-source project does research-grade A-share backtesting and retail
+A-share live execution well, so a best-of-breed split is necessary. vnpy + Qlib is the
+strongest pairing, though neither is usable as-is:
 
 - **Qlib** — research/ML layer. A-share-native (trading calendar, point-in-time
   fundamentals, 25+ model zoo), still maintained (v0.9.7, Aug 2025; development energy has
@@ -21,7 +21,7 @@ strongest pairing, but neither is turnkey:
 - **RQAlpha** — the friction gate. Models exactly those A-share frictions natively
   (verified v6.1.x). A mandatory pass before any strategy advances.
 
-## Three non-optional changes
+## Three required changes
 
 1. **Gate every backtest through an A-share-faithful friction model** (RQAlpha or
    vnpy.alpha). vnpy's default backtester overstates P&L at 5k–3万 accounts, where
@@ -30,7 +30,7 @@ strongest pairing, but neither is turnkey:
    Alpha158 factor code from research to live, structurally eliminating the dominant silent
    failure mode, train/serve feature skew. Move to the full Qlib stack only when the
    deep-model zoo or RD-Agent is actually needed.
-3. **Do not pursue model size for its own sake.** On low-SNR A-share data, deep models
+3. **Model size is not pursued for its own sake.** On low-SNR A-share data, deep models
    frequently lose to GBDT/linear out-of-sample, and DRL (FinRL/TradeMaster) carries a real
    sim-to-real gap at the small-account stage. Honest costs, point-in-time discipline, and
    out-of-sample survival matter more than model complexity. (As of writing: TradeMaster
@@ -40,7 +40,7 @@ strongest pairing, but neither is turnkey:
 
 ## Data
 
-- **BaoStock** (free, anonymous, API) — historical daily backbone. Start here.
+- **BaoStock** (free, anonymous, API) — historical daily backbone; the primary source.
 - **Tushare Pro** (free token; some fields need 积分) — financials, point-in-time index
   membership, delisting. Add when needed.
 - **AKShare** (free, scraper) — realtime L1 snapshot for paper trading only; fragile
