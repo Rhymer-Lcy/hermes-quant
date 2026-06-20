@@ -20,6 +20,8 @@ from .sources import baostock_source as bss
 
 MEMBERSHIP_PARQUET = PARQUET_DIR / "hs300_membership.parquet"
 UNION_CSV = RAW_DIR / "hs300_union.csv"
+CSI500_MEMBERSHIP_PARQUET = PARQUET_DIR / "csi500_membership.parquet"
+CSI500_UNION_CSV = RAW_DIR / "csi500_union.csv"
 
 
 def rs_to_df(rs: Any) -> pd.DataFrame:
@@ -40,27 +42,35 @@ def month_end_trading_dates(start: str, end: str) -> list[str]:
     return last.tolist()
 
 
-def build_membership(start: str = BACKTEST_START, end: str = BACKTEST_END) -> tuple[pd.DataFrame, list[str]]:
-    """Snapshot month-end HS300 membership -> persist a (date, code) table and the
-    union of all names ever in HS300 over the window. Returns (table, union)."""
+def _build_index_membership(query_fn, parquet_path, union_csv, label: str,
+                            start: str, end: str) -> tuple[pd.DataFrame, list[str]]:
+    """Snapshot month-end index membership via `query_fn(date=)` (e.g. bs.query_hs300_stocks
+    or bs.query_zz500_stocks) -> persist a (date, code) table + the survivorship-free union of
+    all names ever in the index over the window. Returns (table, union)."""
     ensure_dirs()
     rows = []
     with bss.session():
-        dates = month_end_trading_dates(start, end)
-        for d in dates:
-            rs = bs.query_hs300_stocks(date=d)
-            df = rs_to_df(rs)
-            for code in df["code"].tolist():
-                rows.append({"date": d, "code": code})
-
+        for d in month_end_trading_dates(start, end):
+            df = rs_to_df(query_fn(date=d))
+            rows.extend({"date": d, "code": c} for c in df["code"].tolist())
     mdf = pd.DataFrame(rows)
     mdf["date"] = pd.to_datetime(mdf["date"])
-    atomic_to_parquet(mdf, MEMBERSHIP_PARQUET, index=False)
+    atomic_to_parquet(mdf, parquet_path, index=False)
     union = sorted(mdf["code"].unique())
-    pd.Series(union, name="code").to_csv(UNION_CSV, index=False)
-    print(f"membership: {mdf['date'].nunique()} monthly snapshots, "
-          f"{len(union)} unique names ever in HS300 (vs 300 current)")
+    pd.Series(union, name="code").to_csv(union_csv, index=False)
+    print(f"{label}: {mdf['date'].nunique()} monthly snapshots, {len(union)} unique names ever in index")
     return mdf, union
+
+
+def build_membership(start: str = BACKTEST_START, end: str = BACKTEST_END) -> tuple[pd.DataFrame, list[str]]:
+    """Snapshot month-end HS300 (沪深300) membership + its all-time union. Returns (table, union)."""
+    return _build_index_membership(bs.query_hs300_stocks, MEMBERSHIP_PARQUET, UNION_CSV, "HS300", start, end)
+
+
+def build_csi500_membership(start: str = BACKTEST_START, end: str = BACKTEST_END) -> tuple[pd.DataFrame, list[str]]:
+    """Snapshot month-end CSI500 (中证500) membership + its all-time union (survivorship-free,
+    free + PIT via BaoStock query_zz500_stocks). Returns (table, union)."""
+    return _build_index_membership(bs.query_zz500_stocks, CSI500_MEMBERSHIP_PARQUET, CSI500_UNION_CSV, "CSI500", start, end)
 
 
 def membership_lookup(mdf: pd.DataFrame):
