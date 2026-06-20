@@ -17,7 +17,7 @@ differences isolate engine + price-data + corporate-action handling.
 | 1,000,000 | -8.0%                | -5.2%            |
 
 Two independent engines + two independent price datasets agree: survivorship-free
-naive 20-day momentum on HS300 loses ~5-8%/yr with catastrophic drawdowns (~75-88%).
+naive 20-day momentum on HS300 loses ~5-8%/yr with extreme drawdowns (~75-88%).
 
 Conclusions:
 1. The hand-rolled engine is **trustworthy** (within ~1-2pp CAGR of RQAlpha).

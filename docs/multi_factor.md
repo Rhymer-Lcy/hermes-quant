@@ -96,7 +96,7 @@ The only equity lever left is a **wider universe (CSI 500** -- free + PIT via Ba
 cutting −33% (not re-sampling the same beta) realistically needs a **hedge overlay** -- a new
 scope. The base strategy accepts −33% as understood systematic market risk.
 
-## The mistake this caught (the real lesson)
+## Key finding: the sampling mistake this caught
 
 The first version of this study tested only three heavy-reversal weights (50/50, 67/33,
 75/25), which happen to bracket the worst region of the curve, and concluded "no combination

@@ -14,7 +14,7 @@ at the rebalance; PIT universe; A-share frictions).
 | value                      | +9.2% | -33.0% | 0.28   |
 | value + 200d-MA regime     | +0.7% | -42.5% | 0.02   |
 
-The filter HURT both axes: it gutted the return (9.2% -> 0.7%) and even worsened max
+The filter hurt both axes: it sharply reduced the return (9.2% -> 0.7%) and even worsened max
 drawdown (-33% -> -42.5%). Why: A-share moves are sharp and V-shaped, so a lagging
 200-day MA exits *after* the drop and re-enters *after* the recovery (whipsaw); the
 monthly rebalance compounds the lag; and value's worst stretches are growth-led rallies
@@ -48,7 +48,7 @@ low-vol blend changes *which* names are selected. Bar: raise Calmar over plain v
 better risk-adjusted returns). Worth keeping. The **value×low-vol blend adds nothing**:
 val×lowvol/invvol equals value/invvol, i.e. the blend contributes 0 beyond inverse-vol.
 
-### The survivorship leak this caught (the real lesson)
+### Key finding: the survivorship leak this caught
 
 The blend *first* looked like a clear win (Calmar 0.32, with a clean monotone window
 sweep 0.35→0.26). Adversarial verification found why: the blend standardizes
@@ -82,7 +82,7 @@ FAILED (A3, A4 below); only the *universe* dimension (CSI 500) is left untried.
 
 ## A3 — sector / industry neutralization: FAILED (counterproductive)
 
-Premise (correct): the value top-10 is brutally sector-concentrated -- ~70% banks (申万
+Premise (correct): the value top-10 is extremely sector-concentrated -- ~70% banks (申万
 J-financials) plus real-estate and construction. So "diversify across sectors to cut the
 correlated drawdown" looks reasonable. Tested two ways on PIT HS300 (top-10 monthly, A-share
 frictions, 1M): full within-sector demean of the value score, and a per-sector name cap.
@@ -123,8 +123,8 @@ value:size at PIT HS300 (top-10 monthly, frictions, 1M; full curve -- IRON RULE 
 | value + 0.5·size | +7.3% | -41.5% | 0.18     | 0.19         |
 | size only      | -6.4% | -85.1% | -0.08      | -0.07        |
 
-**Every size weight lowers CAGR and deepens maxDD; size-only is an −85% catastrophe** (and
-worse at every capital tier). Within HS300 the universe is all large caps, so a "small" name
+**Every size weight lowers CAGR and deepens maxDD; size-only delivers −85% maxDD (infeasible)**
+(and worse at every capital tier). Within HS300 the universe is all large caps, so a "small" name
 is a *demoted / falling-knife* blue-chip (distress beta), not the small-cap premium -- and it
 co-moves with the market (corr(small, large) ≈ 0.76), adding no uncorrelated return. Same
 verdict as A1/A2/A3/B. (Repro: `scripts/a4_size_demo.py`.)

@@ -3,10 +3,12 @@
 A-share (大陆股市) quantitative research, backtesting, and paper-trading system.
 Codename **Hermes** — the Greek god of commerce and trade.
 
-> Status: the research pipeline is built and cross-validated — BaoStock historical
-> pull → friction-faithful, point-in-time (survivorship-free) backtest → factor and
-> walk-forward ML evaluation, cross-checked against RQAlpha (see docs/). Next milestone:
-> local paper trading (hermes/live/ledger.py is still a skeleton) before any real money.
+> Status: research pipeline built and cross-validated — BaoStock historical pull →
+> friction-faithful, point-in-time (survivorship-free) backtest → factor and walk-forward
+> ML evaluation, cross-checked against RQAlpha (see docs/). The deployed strategy (value +
+> a light 1-month-reversal tilt) and the EOD paper-trading ledger are built and run forward
+> on real data (see docs/paper_trading.md). Next milestone: small live money via a broker
+> gateway, after the paper-trading record holds up.
 
 ## Architecture
 
@@ -32,10 +34,12 @@ Three staged pipeline (a strategy only advances when the prior stage holds up):
    pass an A-share-faithful friction model** (RQAlpha or vnpy.alpha) before advancing.
    vnpy's default CTA backtester is futures-style and will *overstate* P&L at small
    accounts — never trust un-frictioned backtest returns.
-2. **Realtime paper trading** (模拟盘) at several capital tiers (5k / 1万 / 3万 /
-   10万 / 50万). There is no free hosted A-share stock sim server, so we drive a
-   local simulated matching engine off a live L1 (~3s) snapshot feed. The capital
-   tiers are a config exercise on one strategy object.
+2. **Realtime paper trading** (模拟盘) at capital tiers grouped small/medium/large
+   (1万·5万 / 10万·50万 / 100万·500万). A monthly-rebalance strategy needs only an
+   end-of-day feed, so paper trading is a lightweight idempotent EOD ledger that replays
+   the SAME research engine forward (no train/serve skew); see docs/paper_trading.md.
+   The tiers are a config on one strategy object — and expose that the book is infeasible
+   below ~3万 (100-share lots + 5元 minimum commission).
 3. **Live** (small real money) — *deferred*. Same strategy object, swap the gateway.
 
 See [docs/architecture.md](docs/architecture.md) for the full stack rationale.
@@ -58,7 +62,7 @@ The forks (vnpy etc.) are installed editable from [external/](external/README.md
 
 ```
 conda activate hermes
-python scripts/smoke_baostock.py        # verify the data link
+python scripts/probes/smoke_baostock.py    # verify the data link
 ```
 
 ## Data sources
@@ -81,9 +85,9 @@ src/hermes/        importable package (src-layout, PyPA-recommended)
   config.py        secret/token loading (env → .env.local)
   data/            ETL: vendor adapters → adjusted parquet data lake
   research/        offline: factors, backtest, eval (calibration metrics)
-  live/            online: snapshot collector, idempotent ledger
-  execution/       vnpy strategy adapters
-scripts/           runnable entrypoints & smoke tests
+  live/            online EOD paper trading: strategy spec, feed, idempotent ledger
+  execution/       vnpy strategy adapters (deferred: live broker gateway)
+scripts/           runnable entrypoints (probes/ = one-off & superseded)
 data/              local data lake — INPUTS (gitignored)
 results/           generated OUTPUTS: signals, backtests, figures, models (gitignored)
 external/          forks, pip install -e (gitignored)

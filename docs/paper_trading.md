@@ -74,7 +74,7 @@ re-spells the 5:1 value/reversal blend, so they cannot diverge. `test_paper.py` 
 | 500,000   | 9.9       | +199%        | viable |
 
 **Paper/live should start at ≥3万.** Below that, lot indivisibility and the 5元 minimum
-commission prevent a diversified 10-name book and gut returns — exactly what tier-by-tier paper
+commission prevent a diversified 10-name book and materially reduce returns — exactly what tier-by-tier paper
 trading exists to expose before risking money.
 
 ## Operations
