@@ -24,7 +24,7 @@ is second-order). Friction/feasibility tool, not validated alpha.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import numpy as np
 import pandas as pd
@@ -42,10 +42,28 @@ class PortfolioResult:
     target_n_hold: int
     avg_names_held: float      # EFFECTIVE diversification (mean held names/day)
     total_costs: float
+    trades: list[dict] = field(default_factory=list)   # audit log if collect_trades=True:
+    #   {date, code, shares (+buy/-sell), price (exec, incl. slippage), fee}
 
 
 def _max_drawdown(eq: np.ndarray) -> float:
     return float((eq / np.maximum.accumulate(eq) - 1.0).min())
+
+
+def valuation_panel(price: pd.DataFrame):
+    """Mark-to-market panel + delisting bookkeeping, shared by the backtest engine and the
+    paper ledger so both value the book identically. Returns (valuation, last_valid,
+    last_price): `valuation` carries the last price through INTERIOR halts but is NaN after
+    each name's final real bar (an unbounded ffill would value a delisted name forever);
+    `last_valid[code]`/`last_price[code]` are that final bar's date/price (for forced exit)."""
+    price = price.sort_index()
+    last_valid = {c: price[c].last_valid_index() for c in price.columns}
+    last_price = {c: price[c].loc[lv] for c, lv in last_valid.items() if lv is not None}
+    valuation = price.ffill()
+    for c, lv in last_valid.items():
+        if lv is not None:
+            valuation.loc[valuation.index > lv, c] = np.nan
+    return valuation, last_valid, last_price
 
 
 def _hold_value(positions: dict[str, int], val: pd.Series) -> float:
@@ -76,9 +94,95 @@ def _select_top(ranked: list[str], held: set[str], n_hold: int, band: int) -> li
     return chosen
 
 
+# --- shared rebalance primitives ----------------------------------------------------
+# These three functions are the SINGLE source of truth for "turn a ranked basket into
+# orders". Both the backtest engine (_score_backtest) and the paper-trading ledger
+# (live.paper) call them, so paper trading cannot silently drift from research (the
+# dominant train/serve alpha-killer). Keep them pure and free of any backtest-loop state.
+
+def basket_weights(top: list[str], weight_asof, when) -> dict[str, float]:
+    """Intra-basket weights over `top`, summing to 1. Equal weight if `weight_asof` is
+    None (or yields a non-positive sum); otherwise the normalized non-negative weights
+    from weight_asof(when, top) (e.g. inverse-vol)."""
+    if weight_asof is None:
+        return {c: 1.0 / len(top) for c in top}
+    raw_w = weight_asof(when, top)
+    s = sum(max(raw_w.get(c, 0.0), 0.0) for c in top)
+    if s <= 0:
+        return {c: 1.0 / len(top) for c in top}
+    return {c: max(raw_w.get(c, 0.0), 0.0) / s for c in top}
+
+
+def target_shares(gross: float, weights: dict[str, float], scale: float,
+                  raw: pd.Series, slip: float, lot: int) -> dict[str, int]:
+    """Lot-rounded target share count per name. `scale` = len(top)/n_hold keeps the
+    gross-invested fraction identical to equal weight (unfilled slots stay cash). A name
+    with no tradable price that day gets no target (left untouched by the caller)."""
+    desired: dict[str, int] = {}
+    for code, wt in weights.items():
+        p = raw.get(code, np.nan)
+        if not np.isnan(p):
+            target_val = gross * wt * scale
+            desired[code] = int(target_val // (p * (1 + slip) * lot)) * lot
+    return desired
+
+
+def execute_orders(cash: float, positions: dict[str, int], desired: dict[str, int],
+                   raw: pd.Series, costs: AShareCosts, slip: float, lot: int) -> tuple[float, float, list[dict]]:
+    """Move `positions` toward `desired` shares: sells first (free up cash), then buys
+    (capped by available cash, with a one-lot retry if fees tip it over). Mutates
+    `positions` in place; returns (new_cash, cost_delta, fills). `cost_delta` is the sum of
+    slippage + fees; each fill is {code, shares (+buy/-sell), price (exec, incl. slippage), fee}."""
+    cost_delta = 0.0
+    fills: list[dict] = []
+    for code, tgt in desired.items():                  # sells first
+        cur = positions.get(code, 0)
+        if tgt >= cur:
+            continue
+        p = raw.get(code, np.nan)
+        if np.isnan(p):
+            continue
+        qty = cur - tgt
+        ep = p * (1 - slip)
+        turnover = qty * ep
+        fee = costs.sell_fees(turnover)
+        cash += turnover - fee
+        cost_delta += (qty * p - turnover) + fee
+        positions[code] = cur - qty
+        if positions[code] == 0:
+            del positions[code]
+        fills.append({"code": code, "shares": -qty, "price": ep, "fee": fee})
+    for code, tgt in desired.items():                  # then buys (capped by cash)
+        cur = positions.get(code, 0)
+        if tgt <= cur:
+            continue
+        p = raw.get(code, np.nan)
+        if np.isnan(p):
+            continue
+        ep = p * (1 + slip)
+        affordable = int(cash // (ep * lot)) * lot
+        qty = min(tgt - cur, max(affordable, 0))
+        if qty <= 0:
+            continue
+        turnover = qty * ep
+        fee = costs.buy_fees(turnover)
+        if turnover + fee > cash:
+            qty -= lot
+            if qty <= 0:
+                continue
+            turnover = qty * ep
+            fee = costs.buy_fees(turnover)
+        cash -= turnover + fee
+        cost_delta += (turnover - qty * p) + fee
+        positions[code] = cur + qty
+        fills.append({"code": code, "shares": qty, "price": ep, "fee": fee})
+    return cash, cost_delta, fills
+
+
 def _score_backtest(price: pd.DataFrame, scores: pd.DataFrame, capital: float,
                     n_hold: int, costs: AShareCosts | None, members_asof,
-                    exposure_asof=None, weight_asof=None, rebalance_band: int = 0) -> PortfolioResult:
+                    exposure_asof=None, weight_asof=None, rebalance_band: int = 0,
+                    collect_trades: bool = False) -> PortfolioResult:
     """Engine: each month hold the top-`n_hold` names by `scores` (read at the month-end
     signal date, executed next trading day), with A-share frictions. Weighting is equal
     by default; `weight_asof` supplies an alternative intra-basket weighting (e.g.
@@ -90,14 +194,7 @@ def _score_backtest(price: pd.DataFrame, scores: pd.DataFrame, capital: float,
     slip = costs.slip
 
     price = price.sort_index()
-    # Per-column last real bar: do NOT value or hold a delisted/terminated name past
-    # its final price (an unbounded ffill would carry a dead name forever).
-    last_valid = {c: price[c].last_valid_index() for c in price.columns}
-    last_price = {c: price[c].loc[lv] for c, lv in last_valid.items() if lv is not None}
-    valuation = price.ffill()                  # carry last price through INTERIOR halts...
-    for c, lv in last_valid.items():           # ...but never past a name's final bar
-        if lv is not None:
-            valuation.loc[valuation.index > lv, c] = np.nan
+    valuation, last_valid, last_price = valuation_panel(price)
     dates = price.index
     n = len(dates)
 
@@ -111,6 +208,7 @@ def _score_backtest(price: pd.DataFrame, scores: pd.DataFrame, capital: float,
     total_costs = 0.0
     names_held_daily = []
     equity = np.empty(n)
+    trades: list[dict] = []
 
     for i in range(n):
         di = dates[i]
@@ -127,6 +225,9 @@ def _score_backtest(price: pd.DataFrame, scores: pd.DataFrame, capital: float,
                 fee = costs.sell_fees(turnover)
                 cash += turnover - fee
                 total_costs += fee
+                if collect_trades:
+                    trades.append({"date": di, "code": code, "shares": -qty,
+                                   "price": last_price[code], "fee": fee})
 
         if i in rebal_exec:
             sd = dates[rebal_exec[i]]          # signal (month-end) date
@@ -143,71 +244,17 @@ def _score_backtest(price: pd.DataFrame, scores: pd.DataFrame, capital: float,
                     equity_now = cash + _hold_value(positions, val)
                     exposure = exposure_asof(sd) if exposure_asof is not None else 1.0
                     gross = equity_now * exposure
-
-                    # Intra-basket weights summing to 1 over `top`; equal by default.
                     # `scale` keeps the gross-invested fraction identical to equal weight
-                    # (unfilled target slots stay cash), so weighting is compared on like
-                    # terms -- only the split WITHIN the basket changes.
-                    if weight_asof is not None:
-                        raw_w = weight_asof(sd, top)
-                        s = sum(max(raw_w.get(c, 0.0), 0.0) for c in top)
-                        w = ({c: max(raw_w.get(c, 0.0), 0.0) / s for c in top} if s > 0
-                             else {c: 1.0 / len(top) for c in top})
-                    else:
-                        w = {c: 1.0 / len(top) for c in top}
-                    scale = len(top) / n_hold
-
-                    desired: dict[str, int] = {}
-                    for code in top:
-                        p = raw.get(code, np.nan)
-                        if not np.isnan(p):
-                            target_val = gross * w[code] * scale
-                            desired[code] = int(target_val // (p * (1 + slip) * lot)) * lot
-                    for code in list(positions.keys()):
+                    # (unfilled target slots stay cash), so a weighting scheme is compared
+                    # on like terms -- only the split WITHIN the basket changes.
+                    w = basket_weights(top, weight_asof, sd)
+                    desired = target_shares(gross, w, len(top) / n_hold, raw, slip, lot)
+                    for code in list(positions.keys()):            # sell anything dropped from top
                         desired.setdefault(code, 0)
-
-                    # Sells first (free up cash)...
-                    for code, tgt in desired.items():
-                        cur = positions.get(code, 0)
-                        if tgt >= cur:
-                            continue
-                        p = raw.get(code, np.nan)
-                        if np.isnan(p):
-                            continue
-                        qty = cur - tgt
-                        ep = p * (1 - slip)
-                        turnover = qty * ep
-                        fee = costs.sell_fees(turnover)
-                        cash += turnover - fee
-                        total_costs += (qty * p - turnover) + fee
-                        positions[code] = cur - qty
-                        if positions[code] == 0:
-                            del positions[code]
-
-                    # ...then buys (capped by available cash).
-                    for code, tgt in desired.items():
-                        cur = positions.get(code, 0)
-                        if tgt <= cur:
-                            continue
-                        p = raw.get(code, np.nan)
-                        if np.isnan(p):
-                            continue
-                        ep = p * (1 + slip)
-                        affordable = int(cash // (ep * lot)) * lot
-                        qty = min(tgt - cur, max(affordable, 0))
-                        if qty <= 0:
-                            continue
-                        turnover = qty * ep
-                        fee = costs.buy_fees(turnover)
-                        if turnover + fee > cash:
-                            qty -= lot
-                            if qty <= 0:
-                                continue
-                            turnover = qty * ep
-                            fee = costs.buy_fees(turnover)
-                        cash -= turnover + fee
-                        total_costs += (turnover - qty * p) + fee
-                        positions[code] = cur + qty
+                    cash, cost_delta, fills = execute_orders(cash, positions, desired, raw, costs, slip, lot)
+                    total_costs += cost_delta
+                    if collect_trades:
+                        trades.extend({**fl, "date": di} for fl in fills)
 
         equity[i] = cash + _hold_value(positions, val)
         names_held_daily.append(sum(1 for sh in positions.values() if sh > 0))
@@ -222,6 +269,7 @@ def _score_backtest(price: pd.DataFrame, scores: pd.DataFrame, capital: float,
         target_n_hold=n_hold,
         avg_names_held=float(np.mean(names_held_daily)),
         total_costs=float(total_costs),
+        trades=trades,
     )
 
 
@@ -237,13 +285,15 @@ def momentum_portfolio_backtest(panel: pd.DataFrame, capital: float, n_hold: int
 def signal_portfolio_backtest(price: pd.DataFrame, signal: pd.DataFrame, capital: float,
                               n_hold: int = 10, costs: AShareCosts | None = None,
                               members_asof=None, exposure_asof=None,
-                              weight_asof=None, rebalance_band: int = 0) -> PortfolioResult:
+                              weight_asof=None, rebalance_band: int = 0,
+                              collect_trades: bool = False) -> PortfolioResult:
     """Top-N by an external `signal` panel (date x code), e.g. walk-forward ML
     out-of-sample predictions. `price` is the 前复权 close panel for exec/valuation.
     `exposure_asof`: optional callable(signal_date)->float in [0,1] scaling gross
     exposure (e.g. a market-regime filter); the remainder is held as cash.
     `weight_asof`: optional callable(signal_date, codes)->{code: weight} for intra-basket
     weighting (e.g. inverse-vol); equal weight if omitted.
-    `rebalance_band`: turnover buffer (keep incumbents within top n_hold+band); 0 = off."""
+    `rebalance_band`: turnover buffer (keep incumbents within top n_hold+band); 0 = off.
+    `collect_trades`: also return the per-fill audit log (consumed by live.paper)."""
     return _score_backtest(price, signal, capital, n_hold, costs, members_asof,
-                           exposure_asof, weight_asof, rebalance_band)
+                           exposure_asof, weight_asof, rebalance_band, collect_trades)
