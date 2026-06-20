@@ -167,14 +167,41 @@ top-10 +2.1% / -60.2% / Calmar 0.03; top-30 +6.4% / -39.6% / 0.16; both far belo
 (0.32). The value screen reaches into riskier small-cap deep-value, deepening drawdown. **Don't
 mix; HS300-alone is best** (consistent with A6).
 
+## A8 — IF index-futures short hedge: REJECTED (the −33% is value-style, not market-beta)
+
+The lever held out as "the one that could cut −33%": overlay a short 沪深300 股指期货 (IF) position
+on the long book to neutralize market beta. Built faithfully (`research/backtest/hedge.py`: integer
+contracts, ¥300/pt, roll/basis carry swept 0-4%/yr; `scripts/hedge_study.py`). It does NOT work --
+it makes the drawdown WORSE at every ratio:
+
+| hedge ratio (cost 2%/yr) | CAGR  | maxDD  | Calmar | ann.vol |
+|--------------------------|------:|-------:|-------:|--------:|
+| 0.00 (unhedged)          | +10.5%| -33.1% | 0.32   | 20.4%   |
+| 0.50                     | +7.9% | -41.6% | 0.19   | 17.5%   |
+| 1.00 (full notional)     | +4.7% | -57.0% | 0.08   | 21.3%   |
+
+**Diagnosis (the clean test):** the book's beta to HS300 is only **0.66** with **R² ≈ 0.49** -- it is
+LOW-beta (banks/defensive) and only half its variance is market-driven. A *perfect* beta-hedge leaves
+a residual whose maxDD is **−36.3%, WORSE than the unhedged −33.1%**. So the market beta *cushions* the
+drawdown rather than causing it: value's worst stretches partly coincide with the index RISING
+(growth-led rallies -- the same mechanism that sank A1 market-timing), so shorting the index ADDS losses
+there. An index short reduces *volatility* (minimized ~beta-neutral, 20.4%→16.5%) but cannot cut the
+*maximum drawdown*, which is a value-STYLE tail (the 2015 episode), not a beta event. (Aside: 1 IF ≈
+¥1.4M notional, so a clean hedge needs ≥~¥5M anyway -- small accounts can't.)
+
+To hedge a value-style drawdown you must hedge the STYLE (long cheap / short expensive = long-short),
+not the market -- a structurally different strategy, and A-share 融券 (securities lending) is costly,
+scarce, and constrained, so it is not a free lunch.
+
 ### Where this leaves the drawdown
 
-**Across selection (A3/A4/quality), weighting (A2), factor breadth (B), market timing (A1),
-universe (A6 CSI500, A7 combined), and cadence (A7 M/Q/W) -- the deployed HS300 value + light
-1-month-reversal, monthly, top-10 (Calmar ~0.32, maxDD −33%) is confirmed the best long-only
-A-share equity configuration.** The −33% is systematic whole-market beta. **The ONE remaining
-lever that can actually cut it is a HEDGE OVERLAY** (short 股指期货 IF / index puts) -- a new
-instrument scope, which is exactly what the `hermes.intraday` futures line sets up (IF minute
-data is in hand). The other genuinely-untested axis is **long-short** construction (also a
-structural change). Until then the deployed strategy accepts the −33% as understood, bounded,
-systematic market risk.
+**Every lever has now been tested -- selection (A3/A4/quality), weighting (A2), factor breadth (B),
+market timing (A1), universe (A6/A7), cadence (A7), and an index hedge (A8) -- and the deployed HS300
+value + light 1-month-reversal, monthly, top-10 (Calmar ~0.32, maxDD −33%) is the best long-only
+configuration. The −33% is the INTRINSIC drawdown of a long-only A-share value strategy: it is
+value-style, not market-beta, so no selection trick or index hedge removes it.** The only structurally
+different option left is a true long-short value book (hedge the style), gated by costly/constrained
+A-share 融券. Absent that, the deployed strategy **accepts the −33% as the understood, intrinsic cost of
+harvesting the value premium long-only** -- and the honest takeaway is that the realistic improvement
+frontier for this account is operational (the running paper record) and capacity-aware, not another
+drawdown lever.
