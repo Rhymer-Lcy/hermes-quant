@@ -6,8 +6,9 @@ factors. All take/return wide daily panels (date x code).
 
 Point-in-time note: value factors (pe/pb) are daily as-of values, so they carry no
 announcement lag; price-based factors (momentum/vol/reversal) use only past closes.
-Size (market cap) is implemented in small_size() but its data is NOT yet ingested
-(see scripts/ingest_size.py); quality (ROE) will be aligned by announcement date when added.
+Size (market cap) reconstructs free-float cap from the daily lake via float_cap() (no
+Tushare needed), but a within-HS300 size tilt is REJECTED (deepens drawdown -- see A4 in
+docs/risk_control.md); quality (ROE) will be aligned by announcement date when added.
 """
 from __future__ import annotations
 
@@ -107,10 +108,25 @@ def book_yield(pb: pd.DataFrame) -> pd.DataFrame:
     return (1.0 / pb).where(pb > 0)
 
 
-def small_size(total_mv: pd.DataFrame) -> pd.DataFrame:
-    """Negative log market cap (the small-size premium).
+def float_cap(amount: pd.DataFrame, turn_pct: pd.DataFrame) -> pd.DataFrame:
+    """Free-float market cap (元), reconstructed from the daily lake -- no Tushare needed.
 
-    NOT in the evaluated factor set yet: market-cap ingestion is DEFERRED (Tushare
-    daily_basic is rate-limited on the current tier; see scripts/ingest_size.py).
+    BaoStock `turn` is the FREE-FLOAT turnover rate in PERCENT (day volume / free-float
+    shares * 100) and `amount` is the day's traded value in 元, so
+        float_cap = amount / (turn/100)   (= price * free-float shares)
+    recovers free-float cap from fields already in the daily bars. Bars with turn<=0
+    (limit-up no-volume, data gaps; ~2% of bars) -> NaN. PIT-safe: same-day inputs only,
+    no lookahead, no announcement lag. This is FREE-float (not total) cap -- the right base
+    for a cross-sectional size factor. Validated 2025-12-31: 600519≈1.73万亿, 601318≈7312亿."""
+    return (amount / (turn_pct / 100.0)).where(turn_pct > 0)
+
+
+def small_size(cap: pd.DataFrame) -> pd.DataFrame:
+    """Negative log market cap (the small-size premium). Feed float_cap() (free, from the
+    daily lake) -- the earlier Tushare-total_mv blocker is moot.
+
+    NOT in the deployed factor set: a within-HS300 size tilt was tested and REJECTED -- it
+    monotonically DEEPENS the drawdown ('small' inside HS300 is distress beta, not the SMB
+    premium; corr(small, large) ≈ 0.76). See docs/risk_control.md A4 and scripts/a4_size_demo.py.
     """
-    return -np.log(total_mv.where(total_mv > 0))
+    return -np.log(cap.where(cap > 0))

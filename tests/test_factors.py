@@ -49,3 +49,19 @@ def test_low_vol_orientation_calm_beats_wild():
                           "wild": [100, 150, 80, 160, 70, 170]}, dtype=float)
     lv = fl.low_vol(close, window=3)
     assert lv.iloc[-1]["calm"] > lv.iloc[-1]["wild"]   # low vol = higher (more attractive)
+
+
+def test_float_cap_reconstruction_and_zero_turn_guard():
+    # float_cap = amount / (turn/100); turn is the free-float turnover rate in PERCENT.
+    amount = pd.DataFrame({"a": [1000.0, 1000.0, 1000.0]})
+    turn = pd.DataFrame({"a": [2.0, 0.0, -1.0]})       # 2% -> cap 50000; 0 / negative -> NaN
+    cap = fl.float_cap(amount, turn)
+    assert math.isclose(cap.loc[0, "a"], 50000.0)      # 1000 / (2/100)
+    assert np.isnan(cap.loc[1, "a"])                   # turn==0 -> NaN (no spurious inf)
+    assert np.isnan(cap.loc[2, "a"])                   # turn<0 -> NaN
+
+
+def test_small_size_orientation_smaller_is_higher():
+    cap = pd.DataFrame({"small": [1e9], "big": [1e12]})
+    s = fl.small_size(cap)
+    assert s.loc[0, "small"] > s.loc[0, "big"]         # smaller cap = more attractive

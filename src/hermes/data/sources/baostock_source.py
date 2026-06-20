@@ -68,6 +68,27 @@ def daily_bars(code: str, start: str, end: str, adjustflag: str = "2") -> pd.Dat
     return df
 
 
+def stock_industry(date: str | None = None) -> pd.DataFrame:
+    """Shenwan (申万) industry classification, FREE. Call inside `session()`.
+
+    `date=None` returns the latest snapshot; `date='2020-06-30'` returns the snapshot
+    effective at/just before that date (DATE-AWARE -> point-in-time capable). Columns:
+    updateDate, code, code_name, industry, industryClassification. `code` is BaoStock-style
+    ('sh.600000'), so it joins the rest of the lake directly; `industry` can be empty for a
+    few delisted/untagged names. Note: Chinese `industry`/`code_name` strings are returned
+    GBK-encoded -- group/key on the raw string, never on a re-decoded console rendering.
+
+    Useful for sector EXPOSURE/attribution (not as an alpha lever: sector-neutralizing value
+    in HS300 worsens drawdown -- see docs/risk_control.md A3)."""
+    rs = bs.query_stock_industry(date=date) if date else bs.query_stock_industry()
+    if rs.error_code != "0":
+        raise RuntimeError(f"BaoStock industry query failed: {rs.error_code} {rs.error_msg}")
+    rows = []
+    while rs.next():
+        rows.append(rs.get_row_data())
+    return pd.DataFrame(rows, columns=rs.fields)
+
+
 def index_close(code: str, start: str, end: str) -> pd.Series:
     """Daily close for an index (e.g. 'sh.000300' = 沪深300). Call inside `session()`.
     Indices have no valuation/复权 fields, so only date+close are requested."""
