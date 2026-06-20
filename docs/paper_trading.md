@@ -9,7 +9,7 @@ that exact strategy *forward* on fresh end-of-day data, at capital tiers, before
 
 A monthly-rebalance strategy does not require a tick/realtime gateway. The chosen design:
 
-> The research backtest engine is the strategy brain; paper trading only records its decisions.
+> The research backtest engine is the strategy logic; paper trading only records its decisions.
 
 `live.paper.replay()` runs `signal_portfolio_backtest(..., collect_trades=True)` over the data
 available so far and folds its per-fill trade log, day by day, into an idempotent `LedgerState`
