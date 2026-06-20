@@ -129,14 +129,36 @@ is a *demoted / falling-knife* blue-chip (distress beta), not the small-cap prem
 co-moves with the market (corr(small, large) ≈ 0.76), adding no uncorrelated return. Same
 verdict as A1/A2/A3/B. (Repro: `scripts/a4_size_demo.py`.)
 
+## A6 — wider universe (CSI 500): FAILED (small-cap beta is worse, not better)
+
+The last untested equity lever: extend to CSI 500 (中证500) mid/small caps for genuine
+cross-sector breadth. Built survivorship-free (1326-name PIT union, free via BaoStock
+`query_zz500_stocks`), traded with **涨跌停 no-fill ON and ST names filtered** (the rigorous
+small-cap treatment), same 2015-2025 window as HS300 (`scripts/csi500_study.py`):
+
+| variant (1M, 2015-2025)        | CAGR  | maxDD  | net Calmar | sector HHI |
+|--------------------------------|------:|-------:|-----------:|-----------:|
+| HS300 value+rev 5/1 (deployed) | +10.5%| -33.0% | **0.32**   | 0.58 |
+| CSI500 value, top-30           | +4.6% | -46.1% | 0.10       | 0.13 |
+| CSI500 value, top-50           | +5.1% | -47.8% | 0.11       | 0.09 |
+| CSI500 value+quality+rev top30 | +0.0% | -69.7% | 0.00       | 0.11 |
+
+**Breadth materialized -- and bought nothing.** The wider universe DOES cure the concentration
+(sector HHI 0.58 → 0.09-0.13, the ~70%-banks problem gone), but maxDD is far WORSE (-46% to -48%
+vs -33%) and CAGR far LOWER (+4-5% vs +10.5%), so net Calmar collapses 0.32 → 0.10. It is the
+**universe, not the friction model**: CSI500 value top-30 at ZERO cost and limits OFF is still
+-45.2% maxDD / 0.10 Calmar (limits add ~1%). A-share mid/small caps simply carry deeper systematic
+drawdowns (2015/2018 crashes) and lower risk-adjusted returns; more names re-sample a *worse* beta.
+Quality/diversification (which only cured concentration on HS300) make CSI500 worse still (-70%).
+**Verdict: stay on HS300; CSI500 expansion is rejected.**
+
 ### Where this leaves the drawdown
 
-Five independent angles -- A1 (timing), A2 (weighting), B (factor breadth), A3 (sector), A4
-(size) -- all confirm the **−33% is systematic whole-market beta that no selection/weighting
-lever inside the HS300 large-cap universe can cut**. The only equity lever left untested is
-the **universe** itself (CSI 500 PIT membership is free + date-aware via BaoStock
-`query_zz500_stocks`); even that is rated low-odds (A-share mid/small-caps drew down *harder*
-in 2015/2018) and would first require modeling 涨跌停 no-fill. Genuinely *cutting* −33% (vs
-re-sampling the same beta) realistically needs a **hedge overlay** (index-futures short / puts)
--- a new instrument scope. The deployed strategy (value + light reversal + inverse-vol,
-Calmar ~0.32) accepts the −33% as understood, bounded, systematic market risk.
+**Six independent angles -- A1 (timing), A2 (weighting), B (factor breadth), A3 (sector), A4
+(size), A6 (wider universe) -- plus the quality/multi-factor study, all confirm the same thing:
+the deployed HS300 value + light-reversal book (Calmar ~0.32, maxDD −33%) is the best long-only
+A-share equity strategy reachable by selection / weighting / universe.** The −33% is systematic
+whole-market beta. **The ONE remaining lever that can actually cut it is a HEDGE OVERLAY**
+(short 股指期货 IF / index puts) -- a new instrument scope, which is exactly what the
+`hermes.intraday` futures line sets up (IF minute data is in hand). Until then the deployed
+strategy accepts the −33% as understood, bounded, systematic market risk.
