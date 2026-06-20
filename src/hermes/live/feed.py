@@ -25,6 +25,7 @@ from ..data import ingest
 from ..data.membership import (MEMBERSHIP_PARQUET, UNION_CSV,
                                month_end_trading_dates, rs_to_df)
 from ..data.sources import baostock_source as bss
+from ..io import atomic_to_parquet
 from ..paths import RAW_DIR, ensure_dirs
 
 
@@ -59,7 +60,7 @@ def extend_membership(end: str | None = None) -> tuple[pd.DataFrame, list[str], 
     new = pd.DataFrame(rows, columns=["date", "code"])
     mdf = pd.concat([existing, new], ignore_index=True) if existing is not None else new
     mdf = mdf.drop_duplicates(["date", "code"]).sort_values(["date", "code"]).reset_index(drop=True)
-    mdf.to_parquet(MEMBERSHIP_PARQUET, index=False)
+    atomic_to_parquet(mdf, MEMBERSHIP_PARQUET, index=False)
     union = sorted(mdf["code"].unique())
     ensure_dirs()
     pd.Series(union, name="code").to_csv(UNION_CSV, index=False)
@@ -68,18 +69,42 @@ def extend_membership(end: str | None = None) -> tuple[pd.DataFrame, list[str], 
     return mdf, union, new_dates
 
 
-def update_daily_bars(union: list[str], end: str | None = None) -> pd.DataFrame:
+def assert_pull_healthy(summary: pd.DataFrame, n_union: int, min_ok_fraction: float = 0.98) -> float:
+    """Return the OK fraction of a pull summary; RAISE if it falls below `min_ok_fraction`
+    (a degraded pull would leave a mixed-基准 lake -- see update_daily_bars)."""
+    ok = int((summary["status"] == "ok").sum()) if len(summary) else 0
+    frac = ok / n_union if n_union else 0.0
+    if frac < min_ok_fraction:
+        raise RuntimeError(
+            f"degraded BaoStock pull: {ok}/{n_union} ok ({frac:.1%} < {min_ok_fraction:.0%}); "
+            "refusing to update the live record on a partial/mixed-basis lake (re-run when the "
+            "source recovers -- the next full pull self-heals)")
+    return frac
+
+
+def update_daily_bars(union: list[str], end: str | None = None,
+                      min_ok_fraction: float = 0.98) -> pd.DataFrame:
     """Full re-pull of 前复权 daily bars for `union` over [BACKTEST_START, end] (overwrites;
-    re-basing-safe -- see module docstring). Returns the pull summary."""
+    re-basing-safe -- see module docstring). Returns the pull summary.
+
+    DATA-INTEGRITY GATE (for unattended daily operation): a common BaoStock failure is login
+    succeeding then names timing out mid-batch, which would leave those names on their prior
+    re-basis while the rest are re-based -- a mixed-adjustment lake. pull_universe records-and-
+    continues (correct for a one-shot historical ingest), so here we RAISE if the OK fraction
+    drops below `min_ok_fraction`. Raising aborts refresh() before any live report is written,
+    so the auto-maintained record never computes on a degraded lake; the next clean run re-pulls
+    the whole union and self-heals."""
     end = end or _today()
     summary = ingest.pull_universe(union, ingest.BACKTEST_START, end)
     ingest.write_pull_summary(summary, name="live_refresh")
+    assert_pull_healthy(summary, len(union), min_ok_fraction)
     return summary
 
 
 def refresh(end: str | None = None) -> tuple[pd.DataFrame, list[str]]:
-    """One call: extend membership to `end`, then refresh the union's daily bars. Returns
-    (membership_df, union). Run after market close on a trading day."""
+    """One call: extend membership to `end`, then refresh the union's daily bars (failing loud
+    on a degraded pull -- see update_daily_bars). Returns (membership_df, union). Run after
+    market close on a trading day."""
     end = end or _today()
     mdf, union, _ = extend_membership(end)
     update_daily_bars(union, end)

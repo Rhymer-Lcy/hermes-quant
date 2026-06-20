@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import pandas as pd
 
+from ..io import atomic_to_parquet
 from ..paths import PARQUET_DIR, RAW_DIR, ensure_dirs
 from .sources import baostock_source as bss
 
@@ -49,7 +50,7 @@ def pull_universe(codes, start: str = BACKTEST_START, end: str = BACKTEST_END) -
             try:
                 df = bss.daily_bars(code, start, end, adjustflag="2")
                 if not df.empty:
-                    df.to_parquet(out / f"{code.replace('.', '_')}.parquet", index=False)
+                    atomic_to_parquet(df, out / f"{code.replace('.', '_')}.parquet", index=False)
                 results.append({"code": code, "rows": len(df), "status": "ok"})
             except Exception as exc:  # noqa: BLE001 -- record and keep the batch going
                 results.append({"code": code, "rows": 0, "status": f"error: {exc}"})

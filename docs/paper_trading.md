@@ -91,11 +91,33 @@ python scripts/paper_live.py --as-of 2026-03-31 --no-refresh   # historical repl
 ```
 
 Outputs (gitignored) under `results/paper/`: `curve_<tier>.parquet`, `trades_<tier>.parquet`,
-`report_<tier>.json`. **Every run is idempotent** (recompute-from-seed), so a missed or repeated
-day is harmless. Schedule daily ~15:35 CST via Windows Task Scheduler or the `/schedule` skill.
+`report_<tier>.json`, `logs/paper_<date>.log`. **Every run is idempotent** (recompute-from-seed),
+so a missed or repeated day is harmless.
+
+Scheduling — use the wrapper `scripts/paper_live.ps1` (captures stdout/stderr to a timestamped
+log and propagates the exit code; Task Scheduler discards output otherwise), weekdays after close:
+
+```
+schtasks /Create /SC WEEKLY /D MON,TUE,WED,THU,FRI /ST 15:35 /TN hermes-paper ^
+  /TR "powershell -NoProfile -ExecutionPolicy Bypass -File F:\hermes-quant\scripts\paper_live.ps1"
+```
+
+### Unattended-operation guardrails (so the auto-record can be trusted)
+- **Fail loud on a degraded pull**: `feed.update_daily_bars` raises (nonzero exit, NO report
+  written) if the BaoStock pull falls below 98% OK — a partial outage would otherwise leave a
+  mixed-前复权-basis lake; the next clean run re-pulls the whole union and self-heals.
+- **Fresh-vs-stale signal**: each report carries `run_date`, `lake_lag_days`, and `fresh`; a
+  holiday/weekend/source-lag run (which idempotently re-computes the prior bar) prints a `STALE`
+  banner instead of masquerading as a fresh trading-day update.
+- **Atomic writes**: all parquet/JSON outputs (lake bars, membership, curves, reports) write to a
+  temp file then `os.replace()`, so a crash mid-write can never wedge later runs with a truncated file.
+- **No spurious rebalance at the right edge**: the engine's `+1 < n` guard and the current-month
+  membership exclusion mean a non-trading-day run never fires a rebalance (verified).
 
 ## Deferred (not in this stage)
 
-Corporate-action cash accounting (see above); 涨跌停 no-fill in the engine (justified for liquid
-HS300; needed for a CSI500 universe — see risk_control.md); the vnpy realtime gateway /
-`vnpy_paperaccount` path (`execution/`), reserved for higher-frequency or true-live execution.
+Corporate-action cash accounting (see above); a marks-only incremental pull on non-rebalance days
+(the daily full re-pull is correct but heavier than needed); suspension-vs-delisting flag at the
+right edge (latent, zero current impact); 涨跌停 no-fill in the engine (justified for liquid HS300;
+needed for a CSI500 universe — see risk_control.md); the vnpy realtime gateway / `vnpy_paperaccount`
+path (`execution/`), reserved for higher-frequency or true-live execution.

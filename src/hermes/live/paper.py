@@ -16,11 +16,13 @@ or true-live use; a monthly rebalance does not need them.
 from __future__ import annotations
 
 import json
+from datetime import date
 
 import pandas as pd
 
 from ..data.lake import load_close_panel
 from ..data.membership import MEMBERSHIP_PARQUET, membership_lookup
+from ..io import atomic_to_parquet, atomic_write_text
 from ..paths import PAPER_DIR, ensure_dirs
 from ..research.backtest.frictions import AShareCosts
 from ..research.backtest.portfolio import signal_portfolio_backtest, valuation_panel
@@ -88,8 +90,17 @@ def live_step(seed_cash: float, as_of: str | None = None, *, spec: DeployedStrat
     today = close.index[-1]
     today_fills = [{**t, "date": t["date"].strftime("%Y-%m-%d")} for t in res.trades
                    if t["date"] == today]
+    # Observability: separate the DATA date (last bar) from the wall-clock RUN date, so a
+    # holiday/weekend/pre-publication run (which idempotently re-computes the prior bar) is
+    # distinguishable from a fresh trading-day update. `lake_lag_days` > a long weekend (~4d)
+    # means the lake is stale (no new data ingested), surfaced as a banner by paper_live.
+    run_dt = date.today()
+    lake_lag = (run_dt - today.date()).days
     report = {
-        "as_of": today.strftime("%Y-%m-%d"),
+        "as_of": today.strftime("%Y-%m-%d"),          # last data bar (the strategy's clock)
+        "run_date": run_dt.strftime("%Y-%m-%d"),       # wall-clock date this was computed
+        "lake_lag_days": lake_lag,                     # run_date - as_of (calendar days)
+        "fresh": lake_lag <= 4,                        # False => likely a stale/holiday no-op
         "seed_cash": seed_cash,
         "equity": float(res.equity.iloc[-1]),
         "total_return": float(res.total_return),
@@ -103,8 +114,8 @@ def live_step(seed_cash: float, as_of: str | None = None, *, spec: DeployedStrat
     if persist:
         ensure_dirs()
         tag = f"{int(seed_cash)}"
-        ledger_equity(ledger).to_frame().to_parquet(PAPER_DIR / f"curve_{tag}.parquet")
-        pd.DataFrame(res.trades).to_parquet(PAPER_DIR / f"trades_{tag}.parquet")
-        (PAPER_DIR / f"report_{tag}.json").write_text(
-            json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+        atomic_to_parquet(ledger_equity(ledger).to_frame(), PAPER_DIR / f"curve_{tag}.parquet")
+        atomic_to_parquet(pd.DataFrame(res.trades), PAPER_DIR / f"trades_{tag}.parquet")
+        atomic_write_text(json.dumps(report, ensure_ascii=False, indent=2),
+                          PAPER_DIR / f"report_{tag}.json")
     return report

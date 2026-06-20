@@ -13,6 +13,7 @@ from typing import Any
 import baostock as bs
 import pandas as pd
 
+from ..io import atomic_to_parquet
 from ..paths import PARQUET_DIR, RAW_DIR, ensure_dirs
 from .ingest import BACKTEST_END, BACKTEST_START
 from .sources import baostock_source as bss
@@ -54,7 +55,7 @@ def build_membership(start: str = BACKTEST_START, end: str = BACKTEST_END) -> tu
 
     mdf = pd.DataFrame(rows)
     mdf["date"] = pd.to_datetime(mdf["date"])
-    mdf.to_parquet(MEMBERSHIP_PARQUET, index=False)
+    atomic_to_parquet(mdf, MEMBERSHIP_PARQUET, index=False)
     union = sorted(mdf["code"].unique())
     pd.Series(union, name="code").to_csv(UNION_CSV, index=False)
     print(f"membership: {mdf['date'].nunique()} monthly snapshots, "

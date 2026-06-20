@@ -9,10 +9,12 @@ research), then (2) runs the DEPLOYED strategy forward via live.paper.live_step 
 capital tier, recomputing the idempotent ledger from the seed, and (3) prints + persists a
 daily report (equity, today's trades, drawdown, effective diversification) under results/paper/.
 
-Scheduling (Windows Task Scheduler), every trading day ~15:30 CST:
-  schtasks /Create /SC DAILY /ST 15:35 /TN hermes-paper ^
-    /TR "D:\\Anaconda3\\envs\\hermes\\python.exe F:\\hermes-quant\\scripts\\paper_live.py"
-(or drive it from the /schedule skill). It is safe to re-run: each run recomputes from the seed.
+Scheduling (Windows Task Scheduler), weekdays after close (~15:35 CST). Use the wrapper
+scripts/paper_live.ps1 so stdout/stderr are captured to a timestamped log and the exit code
+(nonzero on a degraded pull or crash) is visible as the task's last result:
+  schtasks /Create /SC WEEKLY /D MON,TUE,WED,THU,FRI /ST 15:35 /TN hermes-paper ^
+    /TR "powershell -NoProfile -ExecutionPolicy Bypass -File F:\\hermes-quant\\scripts\\paper_live.ps1"
+It is safe to re-run: each run recomputes from the seed; a holiday/stale run is flagged (fresh=false).
 """
 import argparse
 
@@ -51,8 +53,19 @@ def main() -> None:
             print(f"  {side} {t['code']} {abs(t['shares']):>6} @ {t['price']:.2f} fee {t['fee']:.2f}")
     else:
         print("\nno fills today (between monthly rebalances) -- holding.")
+
+    if last_report and not last_report["fresh"]:
+        print(f"\n*** STALE: last data bar {last_report['as_of']} is {last_report['lake_lag_days']}d "
+              f"behind run date {last_report['run_date']} -- no fresh trading-day data (holiday/"
+              f"weekend, source lag, or pull skipped). Record was re-computed, not updated. ***")
     print("\nreports + curves + trade logs saved under results/paper/. Re-run safe (recompute-from-seed).")
+    print(f"OK {last_report['run_date'] if last_report else ''} (as_of {last_report['as_of'] if last_report else '-'})")
 
 
 if __name__ == "__main__":
-    main()
+    import sys
+    try:
+        main()
+    except Exception as exc:                       # unattended run: fail loud + nonzero exit
+        print(f"\nERROR: paper_live failed: {exc}", file=sys.stderr)
+        sys.exit(1)
