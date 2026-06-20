@@ -1,0 +1,38 @@
+# Manage the Hermes scheduled tasks (version-controlled definitions so they are reproducible).
+# Two weekday jobs, isolated from each other:
+#   hermes-paper     15:35  -> paper_live.ps1          (EOD paper trading; updates results/paper/)
+#   hermes-if-accum  15:40  -> accumulate_if_minute.ps1 (IF minute-bar data accumulation)
+#
+# Usage (run from anywhere; paths are derived from this script's location):
+#   powershell -ExecutionPolicy Bypass -File scripts\schedule_tasks.ps1 register   # (re)create both (idempotent)
+#   powershell ... schedule_tasks.ps1 status     # show state + next run time
+#   powershell ... schedule_tasks.ps1 disable    # PAUSE both (keep definitions; resume later)
+#   powershell ... schedule_tasks.ps1 enable     # RESUME both
+#   powershell ... schedule_tasks.ps1 remove     # DELETE both
+# Run one once, now (without waiting for the schedule):  Start-ScheduledTask -TaskName hermes-paper
+# Per-task: replace the loop with a single -TaskName, e.g.  Disable-ScheduledTask -TaskName hermes-if-accum
+param([ValidateSet('register', 'status', 'disable', 'enable', 'remove')] [string]$action = 'status')
+$ErrorActionPreference = 'Stop'
+$tasks = @{
+  'hermes-paper'    = @{ file = Join-Path $PSScriptRoot 'paper_live.ps1';          time = '15:35'; desc = 'Hermes daily EOD paper trading (weekdays 15:35)' }
+  'hermes-if-accum' = @{ file = Join-Path $PSScriptRoot 'accumulate_if_minute.ps1'; time = '15:40'; desc = 'Hermes daily IF minute-bar accumulator (weekdays 15:40)' }
+}
+switch ($action) {
+  'register' {
+    foreach ($name in $tasks.Keys) {
+      $t = $tasks[$name]
+      $a = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$($t.file)`""
+      $trig = New-ScheduledTaskTrigger -Weekly -DaysOfWeek Monday, Tuesday, Wednesday, Thursday, Friday -At $t.time
+      $p = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive
+      Register-ScheduledTask -TaskName $name -Action $a -Trigger $trig -Principal $p -Description $t.desc -Force | Out-Null
+      "registered $name @ $($t.time) weekdays (LogonType Interactive -- runs when you are logged on, no stored password)"
+    }
+  }
+  'disable' { $tasks.Keys | ForEach-Object { Disable-ScheduledTask -TaskName $_ | Out-Null; "disabled (paused) $_" } }
+  'enable'  { $tasks.Keys | ForEach-Object { Enable-ScheduledTask -TaskName $_ | Out-Null; "enabled $_" } }
+  'remove'  { $tasks.Keys | ForEach-Object { Unregister-ScheduledTask -TaskName $_ -Confirm:$false; "removed $_" } }
+  'status'  {
+    Get-ScheduledTask -TaskName 'hermes-*' | Select-Object TaskName, State | Format-Table -AutoSize
+    Get-ScheduledTask -TaskName 'hermes-*' | ForEach-Object { "{0}: next run {1}" -f $_.TaskName, (Get-ScheduledTaskInfo -TaskName $_.TaskName).NextRunTime }
+  }
+}
