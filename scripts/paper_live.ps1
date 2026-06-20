@@ -4,9 +4,11 @@
 # task's "last result"). Register it with:
 #   schtasks /Create /SC WEEKLY /D MON,TUE,WED,THU,FRI /ST 15:35 /TN hermes-paper `
 #     /TR "powershell -NoProfile -ExecutionPolicy Bypass -File F:\hermes-quant\scripts\paper_live.ps1"
+# Portable: repo root is derived from this script's location (scripts/ -> repo); the python
+# interpreter is overridable via the HERMES_PYTHON env var (falls back to the conda env path).
 $ErrorActionPreference = "Stop"
-$repo = "F:\hermes-quant"
-$py = "D:\Anaconda3\envs\hermes\python.exe"
+$repo = Split-Path -Parent $PSScriptRoot
+$py = if ($env:HERMES_PYTHON) { $env:HERMES_PYTHON } else { "D:\Anaconda3\envs\hermes\python.exe" }
 $logdir = Join-Path $repo "results\paper\logs"
 New-Item -ItemType Directory -Force -Path $logdir | Out-Null
 $log = Join-Path $logdir ("paper_{0:yyyyMMdd}.log" -f (Get-Date))

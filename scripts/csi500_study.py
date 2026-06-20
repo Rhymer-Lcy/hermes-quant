@@ -9,6 +9,10 @@ restrict_to_universe'd to PIT members BEFORE blend (IRON RULE 1); n_hold swept (
 may want a wider basket); net AND gross Calmar; sector concentration measured.
 
     python scripts/csi500_study.py
+
+NOTE: CSI500 was REJECTED (see docs/risk_control.md A6), so its ~220MB local data was purged to
+reclaim disk. This study is kept as the reproducible audit trail; to re-run it, first regenerate the
+data with `python scripts/build_csi500_dataset.py` (free, ~minutes via BaoStock).
 """
 from collections import Counter
 
