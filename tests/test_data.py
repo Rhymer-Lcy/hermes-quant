@@ -7,12 +7,12 @@ from hermes.data.sources.tushare_source import to_ts_code
 
 
 def test_board_of_mapping():
-    assert board_of("sh.688981") == "STAR"      # 科创板
-    assert board_of("sz.300750") == "ChiNext"   # 创业板
+    assert board_of("sh.688981") == "STAR"      # STAR Market
+    assert board_of("sz.300750") == "ChiNext"   # ChiNext
     assert board_of("sz.301234") == "ChiNext"
-    assert board_of("bj.830799") == "BSE"        # 8-prefix 北交所
+    assert board_of("bj.830799") == "BSE"        # 8-prefix Beijing Stock Exchange
     assert board_of("bj.430047") == "BSE"        # 4-prefix
-    assert board_of("sh.600000") == "Main"       # 主板
+    assert board_of("sh.600000") == "Main"       # Main Board
     assert board_of("sz.000001") == "Main"
 
 

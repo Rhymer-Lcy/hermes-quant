@@ -1,4 +1,4 @@
-"""涨跌停 no-fill: limit detection + the engine's buy/sell blocking (opt-in)."""
+"""Price-limit no-fill: limit detection + the engine's buy/sell blocking (opt-in)."""
 import numpy as np
 import pandas as pd
 
