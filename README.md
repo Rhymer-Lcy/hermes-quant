@@ -1,6 +1,6 @@
 # hermes-quant
 
-A-share (大陆股市) quantitative research, backtesting, and paper-trading system.
+A-share (mainland China stock market) quantitative research, backtesting, and paper-trading system.
 Codename **Hermes**.
 
 > Status: the research pipeline is built and cross-validated — BaoStock historical
@@ -25,7 +25,7 @@ open-source tool does both well for A-shares.
             └─────────────────────────────┘         └──────────────────────────┘
                          │
                          ▼
-            RQAlpha friction gate  (T+1 · 涨跌停 · 印花税 · 5元最低佣金 · 100股)
+            RQAlpha friction gate  (T+1 · price limit · stamp tax · ¥5 minimum commission · 100-share lots)
 ```
 
 A staged pipeline; a strategy advances only when the prior stage holds up:
@@ -33,14 +33,14 @@ A staged pipeline; a strategy advances only when the prior stage holds up:
 1. **Backtest** on historical data, offline. Every candidate must pass an
    A-share-faithful friction model (RQAlpha or vnpy.alpha) before advancing. vnpy's
    default CTA backtester is futures-style and overstates P&L at small accounts, where
-   100-share lots, the 5元 minimum commission, 印花税, and T+1 dominate net returns;
+   100-share lots, the ¥5 minimum commission, stamp tax, and T+1 dominate net returns;
    un-frictioned returns are not relied upon.
-2. **Realtime paper trading** (模拟盘) at capital tiers grouped small/medium/large
-   (1万·3万·5万 / 10万·50万 / 100万·500万). A monthly-rebalance strategy needs only an
+2. **Realtime paper trading** (simulated account) at capital tiers grouped small/medium/large
+   (¥10k·¥30k·¥50k / ¥100k·¥500k / ¥1M·¥5M). A monthly-rebalance strategy needs only an
    end-of-day feed, so paper trading is a lightweight idempotent EOD ledger that replays
    the same research engine forward (no train/serve skew); see docs/paper_trading.md.
    The tiers are configuration on one strategy object and make the small-account floor
-   explicit: the book is infeasible below ~3万 (100-share lots + 5元 minimum commission).
+   explicit: the book is infeasible below ~¥30k (100-share lots + ¥5 minimum commission).
 3. **Live** (small real capital): deferred. The same strategy object, with the gateway swapped.
 
 See [docs/architecture.md](docs/architecture.md) for the full stack rationale.
@@ -65,12 +65,12 @@ python scripts/probes/smoke_baostock.py    # verify the data link
 | Source | Auth | Role |
 |---|---|---|
 | **BaoStock** | none (anonymous) | free historical daily backbone — start here |
-| **Tushare Pro** | free token (some fields need 积分) | financials, point-in-time index members, delisting |
+| **Tushare Pro** | free token (some fields need credits) | financials, point-in-time index members, delisting |
 | **AKShare** | none (scraper) | realtime L1 snapshot for paper trading only — fragile, not for the historical backbone |
 
 Backtest window: **2015-01-01 → present** (multi-regime), with the most recent ~1–2 years
 held out for walk-forward validation. **Delisted stocks are included** to avoid
-survivorship bias. Price-limit rules differ by board/date (科创板/创业板 = ±20%).
+survivorship bias. Price-limit rules differ by board/date (STAR Market/ChiNext = ±20%).
 
 ## Layout
 

@@ -31,13 +31,13 @@ re-spells the 5:1 value/reversal blend, so they cannot diverge. `test_paper.py` 
 
 ## Forward-only rigor (things the backtest never had to face)
 
-1. **前复权 re-basing is not append-only.** Forward-adjusted prices rescale the entire
+1. **Forward-adjusted re-basing is not append-only.** Forward-adjusted prices rescale the entire
    history whenever a dividend/split occurs, so naively appending new days would mix two
    adjustment bases in one series. `live.feed.update_daily_bars` therefore performs a full
    re-pull (overwrite) of the union over `[BACKTEST_START, today]`, putting the whole lake on
    one consistent basis; `replay` then recomputes the ledger wholesale from the seed, so the
-   equity curve is always self-consistent and re-running a date reproduces it. 前复权 reinvests
-   dividends via the adjustment, so the paper curve approximates a total-return account.
+   equity curve is always self-consistent and re-running a date reproduces it. Forward-adjusted
+   prices reinvest dividends via the adjustment, so the paper curve approximates a total-return account.
    *Deferred refinement:* explicit corporate-action cash/tax accounting (dividend cash timing,
    dividend tax) — second-order for a monthly large-cap book, required before live.
 
@@ -65,9 +65,9 @@ re-spells the 5:1 value/reversal blend, so they cannot diverge. `test_paper.py` 
 `avg_names_held` (effective diversification) vs the 10-name target, deployed strategy,
 2015-01 → 2026-06 (net of A-share frictions; `strategy.CAPITAL_TIERS`):
 
-| band   | tier (元) | avg names | total return | maxDD  | note |
+| band   | tier (¥)  | avg names | total return | maxDD  | note |
 |--------|----------:|----------:|-------------:|-------:|------|
-| small  | 10,000    | 9.6       | +116%        | -28.5% | marginal — 5元 min commission + lot rounding drag CAGR ~3pp (≈7%/yr) |
+| small  | 10,000    | 9.6       | +116%        | -28.5% | marginal — ¥5 min commission + lot rounding drag CAGR ~3pp (≈7%/yr) |
 | small  | 30,000    | 9.9       | +164%        | -30.7% | viable floor |
 | small  | 50,000    | 9.9       | +173%        | -32.2% | viable |
 | medium | 100,000   | 9.9       | +181%        | -32.6% | working regime |
@@ -75,9 +75,9 @@ re-spells the 5:1 value/reversal blend, so they cannot diverge. `test_paper.py` 
 | large  | 1,000,000 | 9.9       | +193%        | -33.0% | saturated (capacity reference) |
 | large  | 5,000,000 | 9.9       | +194%        | -33.1% | saturated (capacity reference) |
 
-Paper and live should start at ≥3万. At 1万 the book is nearly full (9.6/10), but the 5元
-minimum commission and 100-share lot rounding drag the CAGR ~3pp (≈7% vs ≈10%); below ~5千 it
-cannot hold 10 names at all. The strategy saturates by ~10万 (the large tiers add no new
+Paper and live should start at ≥¥30k. At ¥10k the book is nearly full (9.6/10), but the ¥5
+minimum commission and 100-share lot rounding drag the CAGR ~3pp (≈7% vs ≈10%); below ~¥5k it
+cannot hold 10 names at all. The strategy saturates by ~¥100k (the large tiers add no new
 behaviour and assume negligible, unmodeled market impact). Tier-by-tier paper trading exists
 to establish this floor concretely before capital is committed.
 
@@ -104,7 +104,7 @@ schtasks /Create /SC WEEKLY /D MON,TUE,WED,THU,FRI /ST 15:35 /TN hermes-paper ^
 ### Unattended-operation guardrails (so the auto-record can be trusted)
 - **Fail loud on a degraded pull**: `feed.update_daily_bars` raises (nonzero exit, no report
   written) if the BaoStock pull falls below 98% OK — a partial outage would otherwise leave a
-  mixed-前复权-basis lake; the next clean run re-pulls the whole union and self-heals.
+  mixed-forward-adjusted-basis lake; the next clean run re-pulls the whole union and self-heals.
 - **Fresh-vs-stale signal**: each report carries `run_date`, `lake_lag_days`, and `fresh`; a
   holiday/weekend/source-lag run (which idempotently re-computes the prior bar) prints a `STALE`
   banner rather than presenting itself as a fresh trading-day update.
@@ -117,6 +117,6 @@ schtasks /Create /SC WEEKLY /D MON,TUE,WED,THU,FRI /ST 15:35 /TN hermes-paper ^
 
 Corporate-action cash accounting (see above); a marks-only incremental pull on non-rebalance days
 (the daily full re-pull is correct but heavier than needed); suspension-vs-delisting flag at the
-right edge (latent, zero current impact); 涨跌停 no-fill in the engine (justified for liquid HS300;
-needed for a CSI500 universe — see risk_control.md); the vnpy realtime gateway / `vnpy_paperaccount`
+right edge (latent, zero current impact); price-limit no-fill in the engine (justified for liquid HS300;
+needed for a CSI 500 universe — see risk_control.md); the vnpy realtime gateway / `vnpy_paperaccount`
 path (`execution/`), reserved for higher-frequency or true-live execution.

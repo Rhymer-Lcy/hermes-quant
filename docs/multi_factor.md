@@ -98,7 +98,7 @@ counterproductive on every return/risk axis: net and gross Calmar fall (0.30 →
 maxDD deepens (-33% → -38% to -65%). The gross collapse indicates genuine signal degradation,
 not a friction artifact. This is the third independent confirmation (after A3 sector-neutral,
 A4 size) that in HS300 the cheap-bank concentration is load-bearing -- it is the source of both
-the return and the residual defensiveness. ROE in HS300 tilts toward expensive growth (酒/科技 at
+the return and the residual defensiveness. ROE in HS300 tilts toward expensive growth (liquor/tech at
 high multiples) that drew down harder over 2015-2026. Verdict: keep the deployed HS300 config at
 value + light reversal; do not add quality, broad diversification, or sector-spread here.
 
@@ -124,7 +124,7 @@ tested and both failed: sector/industry neutralization (A3) and a size tilt (A4)
 each deepen the drawdown monotonically (see [docs/risk_control.md](risk_control.md)) -- value
 in HS300 is the bank trade, and that concentration is the strategy's residual defensiveness.
 The only equity lever left is a wider universe (CSI 500 -- free + PIT via BaoStock; CSI
-1000 is not in BaoStock), rated low-odds and gated on modeling 涨跌停 no-fill first. Genuinely
+1000 is not in BaoStock), rated low-odds and gated on modeling price-limit no-fill (no fill at the limit) first. Genuinely
 cutting −33% (not re-sampling the same beta) realistically needs a hedge overlay -- a new
 scope. The base strategy accepts −33% as understood systematic market risk.
 

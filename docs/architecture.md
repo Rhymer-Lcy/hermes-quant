@@ -17,15 +17,15 @@ strongest pairing, though neither is usable as-is:
 - **vnpy** — execution layer. Most actively maintained (v4.4.0, May 2026; ~42k stars) and
   the broadest open-source A-share **live** path; the only candidate spanning
   backtest→paper→live with one strategy callback. Its CTA backtester is futures-style and
-  does not model 印花税 / T+1 / 涨跌停 no-fill / 100股 / 5元最低佣金.
+  does not model stamp tax / T+1 / price-limit no-fill / 100-share lots / ¥5 minimum commission.
 - **RQAlpha** — the friction gate. Models exactly those A-share frictions natively
   (verified v6.1.x). A mandatory pass before any strategy advances.
 
 ## Three required changes
 
 1. **Gate every backtest through an A-share-faithful friction model** (RQAlpha or
-   vnpy.alpha). vnpy's default backtester overstates P&L at 5k–3万 accounts, where
-   100-share lots, the 5元 minimum commission, 印花税, and T+1 dominate net returns.
+   vnpy.alpha). vnpy's default backtester overstates P&L at ¥5k–¥30k accounts, where
+   100-share lots, the ¥5 minimum commission, stamp tax, and T+1 dominate net returns.
 2. **Start in the vnpy.alpha single-stack** for the first strategies. It reuses the same
    Alpha158 factor code from research to live, structurally eliminating the dominant silent
    failure mode, train/serve feature skew. Move to the full Qlib stack only when the
@@ -41,19 +41,19 @@ strongest pairing, though neither is usable as-is:
 ## Data
 
 - **BaoStock** (free, anonymous, API) — historical daily backbone; the primary source.
-- **Tushare Pro** (free token; some fields need 积分) — financials, point-in-time index
+- **Tushare Pro** (free token; some fields need credits) — financials, point-in-time index
   membership, delisting. Add when needed.
 - **AKShare** (free, scraper) — realtime L1 snapshot for paper trading only; fragile
   (EastMoney/Sina scraping, with outage and IP-ban risk), never the backbone.
 - Backtest window **2015→present** (multi-regime); hold out the last ~1–2 years for
   walk-forward. **Include delisted stocks** (survivorship-bias guard). Handle per-board
-  price limits (主板 ±10%, 科创板/创业板 ±20%).
+  price limits (Main Board ±10%, STAR Market/ChiNext ±20%).
 - Live feed (later): broker-backed miniQMT/xtdata is the only robust realtime path.
 
 ## Live & compliance (deferred — no real money yet)
 
-- The miniQMT retail threshold is now commonly **~10万** at many brokers (not the old
-  universal 50万), so a 10万 paper→live step is realistically reachable.
+- The miniQMT retail threshold is now commonly **~¥100k** at many brokers (not the old
+  universal ¥500k), so a ¥100k paper→live step is realistically reachable.
 - Per the 2025-07-07 SSE/SZSE/BSE programmatic-trading rules, **report the program to your
   broker before trading** (this applies to all programmatic trading, not only HFT; the book
   is far below the 300/sec, 20000/day HFT thresholds).

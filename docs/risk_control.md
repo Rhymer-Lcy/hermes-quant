@@ -4,9 +4,9 @@ Plain value (earnings yield), survivorship-free PIT, top-10 equal weight: +9.2% 
 but -33% max drawdown -- not deployable as-is. This log records attempts to cut the
 drawdown without giving back the return. The bar is to raise **Calmar = CAGR / |maxDD|**.
 
-## A1 — market-regime filter (沪深300 200-day MA): FAILED
+## A1 — market-regime filter (CSI 300 200-day MA): FAILED
 
-Gate gross exposure to 0 when 沪深300 is below its 200-day MA, else 1 (decided monthly,
+Gate gross exposure to 0 when CSI 300 is below its 200-day MA, else 1 (decided monthly,
 at the rebalance; PIT universe; A-share frictions).
 
 | variant                    | CAGR  | maxDD  | Calmar |
@@ -82,7 +82,7 @@ FAILED (A3, A4 below); only the *universe* dimension (CSI 500) remained untried.
 
 ## A3 — sector / industry neutralization: FAILED (counterproductive)
 
-Premise (correct): the value top-10 is heavily sector-concentrated -- ~70% banks (申万
+Premise (correct): the value top-10 is heavily sector-concentrated -- ~70% banks (Shenwan
 J-financials) plus real-estate and construction, so diversifying across sectors to cut the
 correlated drawdown appears reasonable. Tested two ways on PIT HS300 (top-10 monthly, A-share
 frictions, 1M): full within-sector demean of the value score, and a per-sector name cap.
@@ -111,7 +111,7 @@ free and PIT-capable; kept for sector *attribution*, not as an alpha lever. Repr
 
 Free-float cap reconstructs from the existing daily lake with no Tushare pull --
 `float_cap = amount / (turn/100)` (BaoStock `turn` is the free-float turnover rate), 97.7%
-bar coverage, validated against known mega-caps (600519 ≈ 1.73万亿). The prior caveat that
+bar coverage, validated against known mega-caps (600519 ≈ ¥1.73 trillion). The prior caveat that
 size was blocked on a rate-limited Tushare tier no longer applies; the factor is now testable. Swept
 value:size at PIT HS300 (top-10 monthly, frictions, 1M; full curve):
 
@@ -131,9 +131,9 @@ verdict as A1/A2/A3/B. (Repro: `scripts/a4_size_demo.py`.)
 
 ## A6 — wider universe (CSI 500): FAILED (small-cap beta is worse, not better)
 
-The last untested equity lever: extend to CSI 500 (中证500) mid/small caps for genuine
+The last untested equity lever: extend to CSI 500 mid/small caps for genuine
 cross-sector breadth. Built survivorship-free (1326-name PIT union, free via BaoStock
-`query_zz500_stocks`), traded with **涨跌停 no-fill ON and ST names filtered** (the rigorous
+`query_zz500_stocks`), traded with **price-limit no-fill ON and ST names filtered** (the rigorous
 small-cap treatment), same 2015-2025 window as HS300 (`scripts/csi500_study.py`):
 
 | variant (1M, 2015-2025)        | CAGR  | maxDD  | net Calmar | sector HHI |
@@ -158,18 +158,18 @@ Two axes flagged as untested (`scripts/cadence_universe_study.py`, HS300 value+r
 
 **Cadence (top-10, deployed signal):** monthly is the peak at every tier. Quarterly cuts cost ~⅔
 (43 vs 131 rebalances) but CAGR drops more -- the 1-month reversal goes stale -- so Calmar is lower
-(0.21-0.23 vs monthly 0.26-0.32), even at 1万 where cost matters most. Weekly churns (562
+(0.21-0.23 vs monthly 0.26-0.32), even at ¥10k where cost matters most. Weekly churns (562
 rebalances, ~4× cost) for no gain (Calmar 0.04-0.27). **Monthly is optimal; the a-priori expectation
 that quarterly helps small accounts is refuted.**
 
-**Combined HS300 ∪ CSI500 (1552 names, monthly, 涨跌停 ON + ST filtered):** dilutes -- combined
+**Combined HS300 ∪ CSI500 (1552 names, monthly, price limit ON + ST filtered):** dilutes -- combined
 top-10 +2.1% / -60.2% / Calmar 0.03; top-30 +6.4% / -39.6% / 0.16; both far below HS300-alone
 (0.32). The value screen reaches into riskier small-cap deep-value, deepening drawdown. **Do not
 mix; HS300-alone is best** (consistent with A6).
 
 ## A8 — IF index-futures short hedge: REJECTED (the −33% is value-style, not market-beta)
 
-The lever most likely to cut the −33% drawdown: overlay a short 沪深300 股指期货 (IF) position
+The lever most likely to cut the −33% drawdown: overlay a short CSI 300 index futures (IF) position
 on the long book to neutralize market beta. Built faithfully (`research/backtest/hedge.py`: integer
 contracts, ¥300/pt, roll/basis carry swept 0-4%/yr; `scripts/hedge_study.py`). It does not work --
 it makes the drawdown worse at every ratio:
@@ -203,7 +203,7 @@ IF/IC/IH short -- any ratio, time-varying-beta, or regime/vol-conditional -- cut
 look-ahead; every tradeable ratio worsens it monotonically (h=0.5 −41.6%, h=1 −57.0%).
 
 To hedge a value-style drawdown one must hedge the style (long cheap / short expensive = long-short),
-not the market -- a structurally different strategy, and A-share 融券 (securities lending) is costly,
+not the market -- a structurally different strategy, and A-share securities lending is costly,
 scarce, and constrained, so it is not a costless option.
 
 ## A9 — per-name stop-loss / take-profit: REJECTED
@@ -228,7 +228,7 @@ predictor cluster exists at the IC level -- **low turnover-volatility (turnstd20
 t=6.15, hit 74%, positive in every 2y sub-period)**, plus low-turnover / illiquidity / low-vol. But it
 is a **left-tail short signal** (it flags names to avoid): long-only it still backtests to Calmar ~0.20
 / −44% with 0.75 correlation to the HS300 book (no diversification). It is only harvestable in a
-long-short book -- the same 融券-gated constraint as A8. **Standalone long-only CSI500 stays rejected under
+long-short book -- the same securities-lending-gated constraint as A8. **Standalone long-only CSI500 stays rejected under
 any factor sophistication.**
 
 ## Intraday IF (separate line): no edge, data-gated -- see [intraday.md](intraday.md)
@@ -247,6 +247,6 @@ A-share strategy reachable, and there is no new tradeable long-only edge to add.
 intrinsic, value-style drawdown of harvesting the value premium long-only; no selection / weighting /
 universe / cadence / stop / index hedge removes it. The only structurally different option is a true
 long-short book (hedge the style / harvest the small-cap short signal), gated by costly, scarce,
-retail-infeasible A-share 融券. The deployable frontier for this account is now operational -- run the
+retail-infeasible A-share securities lending. The deployable frontier for this account is now operational -- run the
 paper record forward to make the 0.32 Calmar credible out-of-sample -- and capacity-aware, not another
 drawdown lever.

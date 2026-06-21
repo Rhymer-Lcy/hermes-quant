@@ -4,7 +4,7 @@ A separate strategy domain from the monthly EOD equity book (different cadence, 
 microstructure). Originally proposed as a market hedge, but A8 disproved index hedging, so this
 line stands on its own merits, not as a hedge. Mode: historical research and simulation only.
 
-## First probe — intraday IF (沪深300 股指期货) signals: no edge (data too shallow to conclude)
+## First probe — intraday IF (CSI 300 stock index futures) signals: no edge (data too shallow to conclude)
 
 Built 3 causal signals on IF minute bars (AKShare Sina, free): intraday time-series momentum,
 opening-range breakout (ORB), overnight-gap fade. Backtested long/short with IF frictions

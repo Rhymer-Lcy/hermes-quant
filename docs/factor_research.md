@@ -45,8 +45,9 @@ factors (momentum/reversal) into the model diluted the signal rather than improv
 
 ## Caveats
 
-Equal-weight top-10 is crude; 涨跌停 no-fill is not modeled in this engine (cross-checked
-via RQAlpha); costs ~ default 万2.5/万5; a single market regime/period; turnover is not
+Equal-weight top-10 is crude; price-limit no-fill (no fill at the limit) is not modeled in
+this engine (cross-checked via RQAlpha); costs ~ default 2.5 bps/5 bps; a single market
+regime/period; turnover is not
 penalized; and size (market cap) is not in this single-factor set (it was reconstructed
 free from the lake and evaluated separately in [risk_control.md](risk_control.md) A4, and
 rejected — a size tilt deepens the drawdown). Treat magnitudes as indicative and the
