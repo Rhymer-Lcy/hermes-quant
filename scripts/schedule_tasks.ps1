@@ -2,6 +2,8 @@
 # Two weekday jobs, isolated from each other:
 #   hermes-paper     15:35  -> paper_live.ps1          (EOD paper trading; updates results/paper/)
 #   hermes-if-accum  15:40  -> accumulate_if_minute.ps1 (IF minute-bar data accumulation)
+# Both use StartWhenAvailable: a run missed because the PC was off/asleep/logged-out fires on the
+# next boot/wake (cannot run while powered off; one catch-up, which suffices given recompute-from-seed).
 #
 # Usage (run from anywhere; paths are derived from this script's location):
 #   powershell -ExecutionPolicy Bypass -File scripts\schedule_tasks.ps1 register   # (re)create both (idempotent)
@@ -24,8 +26,12 @@ switch ($action) {
       $a = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$($t.file)`""
       $trig = New-ScheduledTaskTrigger -Weekly -DaysOfWeek Monday, Tuesday, Wednesday, Thursday, Friday -At $t.time
       $p = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive
-      Register-ScheduledTask -TaskName $name -Action $a -Trigger $trig -Principal $p -Description $t.desc -Force | Out-Null
-      "registered $name @ $($t.time) weekdays (LogonType Interactive -- runs when you are logged on, no stored password)"
+      # StartWhenAvailable: if the PC was off/asleep/logged-out at the scheduled time, run the missed
+      # job once on the next boot/wake (one catch-up, not one-per-missed-day -- which suffices because
+      # the paper ledger is recompute-from-seed, so a single late run reconstructs every skipped bar).
+      $s = New-ScheduledTaskSettingsSet -StartWhenAvailable
+      Register-ScheduledTask -TaskName $name -Action $a -Trigger $trig -Principal $p -Settings $s -Description $t.desc -Force | Out-Null
+      "registered $name @ $($t.time) weekdays (LogonType Interactive; StartWhenAvailable = catch up a missed run on next boot/wake)"
     }
   }
   'disable' { $tasks.Keys | ForEach-Object { Disable-ScheduledTask -TaskName $_ | Out-Null; "disabled (paused) $_" } }
