@@ -45,6 +45,13 @@ A staged pipeline; a strategy advances only when the prior stage holds up:
 
 See [docs/architecture.md](docs/architecture.md) for the full stack rationale.
 
+**Built vs planned.** The research and paper-trading engine is hand-rolled in `src/hermes/`
+and depends on no trading framework; the diagram above is the *target* stack. The external
+frameworks are unmodified — **RQAlpha** is used only as an independent friction cross-check of
+the hand-rolled backtest (see docs/engine_validation.md), while **vnpy** (execution) and
+**Qlib** (ML research) are intended layers that are deferred and not yet used. Nothing under
+`external/` is forked with local changes.
+
 A-share data is low signal-to-noise; honest costs, point-in-time discipline, and
 out-of-sample survival matter more than model size. Research, backtest, paper trading,
 and data ETL are CPU-bound and run on a single local workstation.
@@ -75,17 +82,23 @@ survivorship bias. Price-limit rules differ by board/date (STAR Market/ChiNext =
 ## Layout
 
 ```
-src/hermes/        importable package (src-layout, PyPA-recommended)
-  paths.py         single source of truth for on-disk locations
+src/hermes/        the engine — importable package (src-layout); no trading-framework dependency
   config.py        secret/token loading (env → .env.local)
-  data/            ETL: vendor adapters → adjusted parquet data lake
-  research/        offline: factors, backtest, eval (calibration metrics)
-  live/            online EOD paper trading: strategy spec, feed, idempotent ledger
-  execution/       vnpy strategy adapters (deferred: live broker gateway)
-scripts/           runnable entrypoints (probes/ = one-off & superseded)
+  paths.py, io.py  on-disk locations; atomic file writes
+  data/            vendor adapters (BaoStock/Tushare) → adjusted parquet lake; PIT HS300 membership
+  research/
+    backtest/      friction-faithful backtest engine: portfolio, frictions, limits, hedge, sizing, regime
+    factors/       factor library (value, reversal, low-vol, size, quality)
+    eval/, model/  single-factor IC + calibration; walk-forward LightGBM combiner
+  live/            EOD paper trading: strategy spec, data feed, idempotent ledger
+  intraday/        separate intraday/futures research line (AKShare minute bars)
+  execution/       vnpy live-gateway adapters — deferred stub, unused
+scripts/           one research experiment per file (→ docs A1–A9, B) plus operational drivers
+  probes/          early one-off probes, superseded (kept for provenance)
+tests/             pytest suite (73 tests): engine invariants, no-look-ahead, parity gates
 data/              local data lake — INPUTS (gitignored)
-results/           generated OUTPUTS: signals, backtests, figures, models (gitignored)
-external/          upstream framework checkouts, pip install -e (gitignored)
-docs/              architecture & decisions (tracked: curated findings)
+results/           generated OUTPUTS: signals, backtests, figures, paper ledgers (gitignored)
+external/          upstream checkouts (vnpy, RQAlpha), pip install -e — gitignored, unmodified
+docs/              architecture & curated research findings (tracked)
 notebooks/         research scratch
 ```
