@@ -8,7 +8,7 @@ impossible at the smallest accounts.
 
     python scripts/probes/portfolio_demo.py
 
-This is the NON-PIT baseline (current-membership universe). See portfolio_pit_demo.py
+This is the NON-PIT baseline (current-membership universe). See survivorship_study.py
 for the canonical survivorship-free biased-vs-PIT study.
 """
 

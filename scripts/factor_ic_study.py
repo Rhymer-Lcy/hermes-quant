@@ -4,7 +4,7 @@ The rigorous gate before any ML: which raw factors actually predict next-month
 returns out-of-sample (survivorship-free)? Rank IC is computed on non-overlapping
 month-end dates over the then-current HS300 members.
 
-    python scripts/factor_eval_demo.py
+    python scripts/factor_ic_study.py
 """
 import pandas as pd
 

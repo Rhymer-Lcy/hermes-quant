@@ -105,7 +105,7 @@ injects higher-beta non-financial names that fall harder in a whole-market sello
 test used the *latest* Shenwan snapshot on all dates -- a mild look-ahead *in neutralization's
 favour* -- and it still fails, so the null is robust. (`baostock_source.stock_industry` is
 free and PIT-capable; kept for sector *attribution*, not as an alpha lever. Repro:
-`scripts/a3_sector_demo.py`.)
+`scripts/sector_neutral_study.py`.)
 
 ## A4 — size tilt (small-cap): FAILED (counterproductive)
 
@@ -127,14 +127,14 @@ value:size at PIT HS300 (top-10 monthly, frictions, 1M; full curve):
 (and worse at every capital tier). Within HS300 the universe is all large caps, so a "small" name
 is a *demoted, distressed* blue-chip (distress beta), not the small-cap premium -- and it
 co-moves with the market (corr(small, large) ≈ 0.76), adding no uncorrelated return. Same
-verdict as A1/A2/A3/B. (Repro: `scripts/a4_size_demo.py`.)
+verdict as A1/A2/A3/B. (Repro: `scripts/size_tilt_study.py`.)
 
 ## A6 — wider universe (CSI 500): FAILED (small-cap beta is worse, not better)
 
 The last untested equity lever: extend to CSI 500 mid/small caps for genuine
 cross-sector breadth. Built survivorship-free (1326-name PIT union, free via BaoStock
 `query_zz500_stocks`), traded with **price-limit no-fill ON and ST names filtered** (the rigorous
-small-cap treatment), same 2015-2025 window as HS300 (`scripts/csi500_study.py`):
+small-cap treatment), same 2015-2025 window as HS300 (`scripts/csi500_universe_study.py`):
 
 | variant (1M, 2015-2025)        | CAGR  | maxDD  | net Calmar | sector HHI |
 |--------------------------------|------:|-------:|-----------:|-----------:|
@@ -171,7 +171,7 @@ mix; HS300-alone is best** (consistent with A6).
 
 The lever most likely to cut the −33% drawdown: overlay a short CSI 300 index futures (IF) position
 on the long book to neutralize market beta. Built faithfully (`research/backtest/hedge.py`: integer
-contracts, ¥300/pt, roll/basis carry swept 0-4%/yr; `scripts/hedge_study.py`). It does not work --
+contracts, ¥300/pt, roll/basis carry swept 0-4%/yr; `scripts/index_hedge_study.py`). It does not work --
 it makes the drawdown worse at every ratio:
 
 | hedge ratio (cost 2%/yr) | CAGR  | maxDD  | Calmar | ann.vol |

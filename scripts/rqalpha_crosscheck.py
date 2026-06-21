@@ -9,7 +9,7 @@ engine + price-data + corporate-action validation of the hand-rolled PIT backtes
 (which produced ~ -7%/yr, survivorship-free), holding the membership definition fixed.
 
 Run with the rqalpha env:
-    D:\\Anaconda3\\envs\\rqalpha\\python.exe scripts/rqalpha_momentum.py
+    D:\\Anaconda3\\envs\\rqalpha\\python.exe scripts/rqalpha_crosscheck.py
 """
 import bisect
 

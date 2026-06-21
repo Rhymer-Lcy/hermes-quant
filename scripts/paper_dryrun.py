@@ -11,7 +11,7 @@ Two things this shows:
      (the same diagnostic the backtest engine exposes), which is the point of paper-trading
      across tiers before risking live money.
 
-    python scripts/paper_demo.py
+    python scripts/paper_dryrun.py
 """
 import pandas as pd
 

@@ -11,4 +11,4 @@ research → paper → live pipeline. Nothing here is run on a schedule or impor
 - `backtest_demo.py` — single-name double-MA friction demo (mechanism only, no edge); superseded
   by the portfolio-level research.
 - `portfolio_demo.py` — non-PIT (current-membership) portfolio baseline; superseded by
-  `scripts/portfolio_pit_demo.py`, the canonical survivorship-free study.
+  `scripts/survivorship_study.py`, the canonical survivorship-free study.

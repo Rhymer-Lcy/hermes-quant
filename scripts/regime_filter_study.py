@@ -2,7 +2,7 @@
 drawdown. Compares earnings-yield (value) WITH vs WITHOUT a CSI 300 200-day MA exposure
 filter -- survivorship-free (PIT) and with A-share frictions.
 
-    python scripts/regime_demo.py
+    python scripts/regime_filter_study.py
 """
 import pandas as pd
 

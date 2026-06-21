@@ -16,7 +16,7 @@ the lever loses. A real alpha use would need PIT industry per rebalance; not wor
 for a rejected lever (the free pull is kept in baostock_source.stock_industry for future
 sector ATTRIBUTION on a wider universe). Same verdict as A1/A2/A4/B: the -33% is systematic.
 
-    python scripts/a3_sector_demo.py
+    python scripts/sector_neutral_study.py
 """
 import numpy as np
 import pandas as pd

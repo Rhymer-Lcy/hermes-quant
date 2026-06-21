@@ -138,6 +138,6 @@ def small_size(cap: pd.DataFrame) -> pd.DataFrame:
 
     NOT in the deployed factor set: a within-HS300 size tilt was tested and REJECTED -- it
     monotonically DEEPENS the drawdown ('small' inside HS300 is distress beta, not the SMB
-    premium; corr(small, large) ≈ 0.76). See docs/risk_control.md A4 and scripts/a4_size_demo.py.
+    premium; corr(small, large) ≈ 0.76). See docs/risk_control.md A4 and scripts/size_tilt_study.py.
     """
     return -np.log(cap.where(cap > 0))

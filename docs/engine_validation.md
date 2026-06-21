@@ -35,9 +35,9 @@ the two use different price vendors.
 
 ```
 # hand-rolled (hermes env):
-D:\Anaconda3\envs\hermes\python.exe scripts/portfolio_pit_demo.py
+D:\Anaconda3\envs\hermes\python.exe scripts/survivorship_study.py
 # RQAlpha (separate rqalpha env; needs `rqalpha download-bundle` once):
-D:\Anaconda3\envs\rqalpha\python.exe scripts/rqalpha_momentum.py
+D:\Anaconda3\envs\rqalpha\python.exe scripts/rqalpha_crosscheck.py
 ```
 
 The `rqalpha` env is separate (RQAlpha's dependency set, kept out of `hermes`); it is

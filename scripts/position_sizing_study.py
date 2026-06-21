@@ -15,7 +15,7 @@ the survivorship-defined union (names ever in HS300) leaks into the z-scores and
 inflates the result (the blend's Calmar fell 0.32 -> 0.28 once corrected). Inverse-vol
 needs no such fix: it weights only the already-selected names by their own return std.
 
-    python scripts/a2_sizing_demo.py
+    python scripts/position_sizing_study.py
 """
 import pandas as pd
 

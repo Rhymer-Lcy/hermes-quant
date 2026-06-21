@@ -6,7 +6,7 @@ features -> walk-forward LightGBM (train only on the past) -> out-of-sample sign
 evaluate OOS IC/quantile -> backtest through the PIT friction engine. Outputs go to
 results/ (signals, backtests).
 
-    python scripts/ml_signal_demo.py
+    python scripts/ml_combiner_study.py
 """
 import pandas as pd
 

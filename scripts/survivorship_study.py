@@ -8,7 +8,7 @@ The gap (biased minus PIT) is the survivorship inflation, made explicit.
 
 Prereq: python scripts/build_pit_dataset.py  (membership + union price history)
 
-    python scripts/portfolio_pit_demo.py
+    python scripts/survivorship_study.py
 """
 import pandas as pd
 

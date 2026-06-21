@@ -10,7 +10,7 @@ All results: survivorship-free PIT HS300, A-share frictions, top-10 monthly, 201
 Every cross-sectional blend input is restrict_to_universe()'d to the then-current members
 BEFORE standardization (else the union leaks -- see A2 / risk_control.md).
 
-    python scripts/multifactor_demo.py
+    python scripts/multifactor_study.py
 """
 import pandas as pd
 

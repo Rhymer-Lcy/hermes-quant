@@ -5,7 +5,7 @@ A full hedge turns the long book into a market-NEUTRAL book whose return is the 
 spread OVER HS300 -- trading absolute return + market risk for pure alpha + far lower drawdown.
 Swept: hedge_ratio 0..1 x futures annual_cost {0,2,4%} (brackets roll/basis carry -- post-2015 IF
 ran a deep discount = real negative carry for a short). Hedge leg = HS300 index return (the
-beta removed); integer IF contracts (¥300/pt). 2015-2025. `python scripts/hedge_study.py`
+beta removed); integer IF contracts (¥300/pt). 2015-2025. `python scripts/index_hedge_study.py`
 """
 import numpy as np
 import pandas as pd

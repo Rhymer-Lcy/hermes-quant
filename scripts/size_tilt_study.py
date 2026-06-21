@@ -12,7 +12,7 @@ chip (distress beta), not the small-cap premium -- and it co-moves with the mark
 (corr(small, large) ≈ 0.76), so it adds no uncorrelated return. Same verdict as A1/A2/B:
 the -33% is systematic whole-market beta, uncuttable from inside the HS300 large-cap set.
 
-    python scripts/a4_size_demo.py
+    python scripts/size_tilt_study.py
 """
 import pandas as pd
 

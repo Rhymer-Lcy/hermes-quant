@@ -8,7 +8,7 @@ drawdown -- see the caveat. This result corrects an earlier under-sampled versio
 concluded "nothing helps"; that error, and how it was caught, are recorded below.
 
 All results: survivorship-free PIT HS300, A-share frictions, top-10 monthly, 2015-2025.
-Reproduce: `python scripts/multifactor_demo.py`.
+Reproduce: `python scripts/multifactor_study.py`.
 
 ## 1. Diagnosis — a screen, not a proof
 
@@ -82,7 +82,7 @@ high-turnover signals; it is the application to value/reversal that fails.
 One concern is that the value top-10 is ~70% banks (HHI 0.60), making it an unintended single-sector
 bet. The question is whether adding a quality factor (ROE) and diversifying across factors corrects
 this. ROE is reconstructed free from the lake as `pbMRQ/peTTM` (E/B; validated 600519≈35%, 601398≈10%).
-Swept on HS300, top-10 monthly, 1M, net & gross, measuring sector concentration (`scripts/quality_multifactor_demo.py`):
+Swept on HS300, top-10 monthly, 1M, net & gross, measuring sector concentration (`scripts/quality_multifactor_study.py`):
 
 | config                    | net Calmar | gross Calmar | maxDD  | sector HHI | max sector |
 |---------------------------|-----------:|-------------:|-------:|-----------:|-----------:|

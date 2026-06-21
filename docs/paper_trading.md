@@ -16,7 +16,7 @@ available so far and folds its per-fill trade log, day by day, into an idempoten
 (`live.ledger.fold_day`), valued with the same `valuation_panel` the engine uses. Paper P&L
 is therefore the research engine's P&L reconstructed from an immutable seed: there is no second
 implementation of factors, selection, sizing, or valuation, and hence no train/serve skew (the
-dominant silent source of alpha decay). `scripts/paper_demo.py` asserts that the ledger equity equals the
+dominant silent source of alpha decay). `scripts/paper_dryrun.py` asserts that the ledger equity equals the
 engine equity bar-for-bar at every tier; if that gate fails, paper has drifted from research.
 
 Going forward is one daily step (`live.paper.live_step`): refresh the lake to today, recompute

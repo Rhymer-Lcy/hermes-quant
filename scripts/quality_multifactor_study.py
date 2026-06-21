@@ -7,7 +7,7 @@ either lift Calmar robustly (gross too) or cut sector concentration WITHOUT givi
 ROE is reconstructed free from the lake (pbMRQ/peTTM); all factors restrict_to_universe'd to PIT
 members BEFORE blend (IRON RULE 1). Full curve, not a single point (IRON RULE 2).
 
-    python scripts/quality_multifactor_demo.py
+    python scripts/quality_multifactor_study.py
 """
 from collections import Counter
 

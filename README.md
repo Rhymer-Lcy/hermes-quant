@@ -93,7 +93,7 @@ src/hermes/        the engine — importable package (src-layout); no trading-fr
   live/            EOD paper trading: strategy spec, data feed, idempotent ledger
   intraday/        separate intraday/futures research line (AKShare minute bars)
   execution/       vnpy live-gateway adapters — deferred stub, unused
-scripts/           one research experiment per file (→ docs A1–A9, B) plus operational drivers
+scripts/           *_study.py = one research experiment (→ docs A1–A9, B); else operational drivers (paper_live, build_*, ingest_union)
   probes/          early one-off probes, superseded (kept for provenance)
 tests/             pytest suite (73 tests): engine invariants, no-look-ahead, parity gates
 data/              local data lake — INPUTS (gitignored)

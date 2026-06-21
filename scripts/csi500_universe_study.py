@@ -8,7 +8,7 @@ Rigorous for the small-cap universe: price-limit no-fill ON (limit_flags), ST na
 restrict_to_universe'd to PIT members BEFORE blend (IRON RULE 1); n_hold swept (a wider universe
 may want a wider basket); net AND gross Calmar; sector concentration measured.
 
-    python scripts/csi500_study.py
+    python scripts/csi500_universe_study.py
 
 NOTE: CSI500 was REJECTED (see docs/risk_control.md A6), so its ~220MB local data was purged to
 reclaim disk. This study is kept as the reproducible audit trail; to re-run it, first regenerate the
@@ -107,7 +107,7 @@ def main() -> None:
     line("CSI500 val+qual+rev 3/2/1 n20", fl.blend([ep, q, rev], [3, 2, 1]), 20)
     line("CSI500 val+qual+rev 3/2/1 n30", fl.blend([ep, q, rev], [3, 2, 1]), 30)
     line("CSI500 5-factor eq n30", fl.blend([ep, q, rev, mom, lowvol], [1, 1, 1, 1, 1]), 30)
-    pd.DataFrame(rows).to_csv(BACKTESTS_DIR / "csi500_study.csv", index=False)
+    pd.DataFrame(rows).to_csv(BACKTESTS_DIR / "csi500_universe_study.csv", index=False)
     print("\nKey questions: does CSI500 (wider, more sectors) CUT the ~-33% maxDD vs HS300, and do "
           "quality/diversification HELP here (vs hurting on HS300)? Read maxDD + secHHI + net/gross Calmar.")
 

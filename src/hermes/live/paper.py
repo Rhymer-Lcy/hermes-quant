@@ -38,7 +38,7 @@ def replay(price: pd.DataFrame, signal: pd.DataFrame, seed_cash: float, *,
     by folding `result.trades` day by day from `seed_cash`, valued with `valuation_panel`.
 
     The two equity series MUST agree (live.paper's only job is to record the engine's
-    decisions, not re-decide) -- `scripts/paper_demo.py` asserts this as the anti-skew gate."""
+    decisions, not re-decide) -- `scripts/paper_dryrun.py` asserts this as the anti-skew gate."""
     result = signal_portfolio_backtest(
         price, signal, seed_cash, n_hold=n_hold, costs=costs, members_asof=members_asof,
         weight_asof=weight_asof, rebalance_band=rebalance_band, collect_trades=True,
