@@ -36,7 +36,7 @@ def _max_drawdown(equity: np.ndarray) -> float:
 
 def double_ma_backtest(prices: pd.DataFrame, capital: float, fast: int = 20, slow: int = 60,
                        costs: AShareCosts | None = None) -> BTResult:
-    """`prices`: DataFrame with columns ['date', 'close'] (前复权), ascending."""
+    """`prices`: DataFrame with columns ['date', 'close'] (forward-adjusted), ascending."""
     costs = costs or AShareCosts()
     df = prices[["date", "close"]].dropna().sort_values("date").reset_index(drop=True)
     dates = pd.to_datetime(df["date"]).to_numpy()

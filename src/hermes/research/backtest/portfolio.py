@@ -3,7 +3,7 @@
 Monthly rebalance to an equal-weight top-N basket by a ranking SCORE. Long-only.
 No-lookahead: the score is read at the month-end (signal date) and executed at the
 NEXT trading day's close. T+1 is respected (monthly holding). 100-share lots,
-per-trade 5元 minimum commission, stamp tax, and slippage are all modeled.
+per-trade ¥5 minimum commission, stamp tax, and slippage are all modeled.
 
 Two entry points share one engine (`_score_backtest`):
   - momentum_portfolio_backtest: score = trailing `lookback`-day return.
@@ -17,9 +17,9 @@ Delisting/removal: a holding whose price series permanently ends is force-liquid
 once at its last real price net of fees and is never valued past that bar -- otherwise
 a dead name would re-enter P&L at a stale forward-filled price (survivorship bias).
 
-DOCUMENTED SIMPLIFICATIONS (not hidden): (1) 涨跌停 no-fill is not modeled here (rare
+DOCUMENTED SIMPLIFICATIONS (not hidden): (1) price-limit no-fill is not modeled here (rare
 for a monthly rebalance on liquid HS300); see the RQAlpha cross-check. (2) Lot-sizing
-uses the 前复权 price LEVEL (approximate at the smallest tiers; cross-check confirms it
+uses the forward-adjusted price LEVEL (approximate at the smallest tiers; cross-check confirms it
 is second-order). Friction/feasibility tool, not validated alpha.
 """
 from __future__ import annotations
@@ -135,7 +135,7 @@ def execute_orders(cash: float, positions: dict[str, int], desired: dict[str, in
     `positions` in place; returns (new_cash, cost_delta, fills). `cost_delta` is the sum of
     slippage + fees; each fill is {code, shares (+buy/-sell), price (exec, incl. slippage), fee}.
 
-    `block_buy`/`block_sell`: codes that CANNOT be bought / sold on the exec day (涨跌停 no-fill
+    `block_buy`/`block_sell`: codes that CANNOT be bought / sold on the exec day (price-limit no-fill
     -- a name locked limit-up has no sellers so a buy can't fill; locked limit-down, no buyers so
     a sell can't fill). Both default to empty (no blocking) so the HS300 deployed path is unchanged;
     populated only for the wider/small-cap universe where limits bind (see research.backtest.limits)."""
@@ -262,7 +262,7 @@ def _score_backtest(price: pd.DataFrame, scores: pd.DataFrame, capital: float,
                         desired.setdefault(code, 0)
                     block_buy = block_sell = None
                     if limit_block is not None and di in limit_block.index:
-                        fl = limit_block.loc[di]                    # 涨跌停 no-fill on the EXEC day
+                        fl = limit_block.loc[di]                    # price-limit no-fill on the EXEC day
                         block_buy = set(fl.index[fl == 1])
                         block_sell = set(fl.index[fl == -1])
                     cash, cost_delta, fills = execute_orders(cash, positions, desired, raw, costs,
@@ -304,14 +304,14 @@ def signal_portfolio_backtest(price: pd.DataFrame, signal: pd.DataFrame, capital
                               collect_trades: bool = False, limit_block: pd.DataFrame | None = None,
                               rebalance_freq: str = "M") -> PortfolioResult:
     """Top-N by an external `signal` panel (date x code), e.g. walk-forward ML
-    out-of-sample predictions. `price` is the 前复权 close panel for exec/valuation.
+    out-of-sample predictions. `price` is the forward-adjusted close panel for exec/valuation.
     `exposure_asof`: optional callable(signal_date)->float in [0,1] scaling gross
     exposure (e.g. a market-regime filter); the remainder is held as cash.
     `weight_asof`: optional callable(signal_date, codes)->{code: weight} for intra-basket
     weighting (e.g. inverse-vol); equal weight if omitted.
     `rebalance_band`: turnover buffer (keep incumbents within top n_hold+band); 0 = off.
     `collect_trades`: also return the per-fill audit log (consumed by live.paper).
-    `limit_block`: optional (date x code) 涨跌停 flag panel (research.backtest.limits.limit_flags);
+    `limit_block`: optional (date x code) price-limit flag panel (research.backtest.limits.limit_flags);
     blocks buys at the up-limit / sells at the down-limit on the exec day. OFF (None) by default
     -- liquid HS300 doesn't need it; supply it for the CSI500/small-cap universe."""
     return _score_backtest(price, signal, capital, n_hold, costs, members_asof,

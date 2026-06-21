@@ -63,12 +63,12 @@ def _build_index_membership(query_fn, parquet_path, union_csv, label: str,
 
 
 def build_membership(start: str = BACKTEST_START, end: str = BACKTEST_END) -> tuple[pd.DataFrame, list[str]]:
-    """Snapshot month-end HS300 (沪深300) membership + its all-time union. Returns (table, union)."""
+    """Snapshot month-end HS300 (CSI 300) membership + its all-time union. Returns (table, union)."""
     return _build_index_membership(bs.query_hs300_stocks, MEMBERSHIP_PARQUET, UNION_CSV, "HS300", start, end)
 
 
 def build_csi500_membership(start: str = BACKTEST_START, end: str = BACKTEST_END) -> tuple[pd.DataFrame, list[str]]:
-    """Snapshot month-end CSI500 (中证500) membership + its all-time union (survivorship-free,
+    """Snapshot month-end CSI500 (CSI 500) membership + its all-time union (survivorship-free,
     free + PIT via BaoStock query_zz500_stocks). Returns (table, union)."""
     return _build_index_membership(bs.query_zz500_stocks, CSI500_MEMBERSHIP_PARQUET, CSI500_UNION_CSV, "CSI500", start, end)
 

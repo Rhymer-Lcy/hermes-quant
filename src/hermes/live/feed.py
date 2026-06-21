@@ -4,15 +4,15 @@ research lake uses (BaoStock), so paper data == research data (no source skew).
 Two refreshes, run after market close on a trading day:
   - extend_membership(): pull HS300 month-end snapshots NEWER than the last stored one and
     append; rebuild the all-time union (so 2026 entrants get added without losing history).
-  - update_daily_bars(): re-pull 前复权 daily bars for the union through `end`.
+  - update_daily_bars(): re-pull forward-adjusted daily bars for the union through `end`.
 
-WHY a FULL re-pull, not an append: 前复权 (forward-adjusted) prices are RE-BASED across the
+WHY a FULL re-pull, not an append: forward-adjusted prices are RE-BASED across the
 entire history whenever a dividend/split occurs, so appending only new days would mix two
 adjustment bases in one series. A full overwrite (pull_universe already overwrites per code)
 keeps the whole lake on ONE consistent basis; live.paper then recomputes the ledger wholesale
 from the seed, so the equity curve is always self-consistent. Cost: a few minutes of free
 BaoStock calls per run -- fine for a monthly strategy refreshed once a trading day. (A
-trailing-window incremental would need 不复权 + an adjustment factor stored separately; deferred.)
+trailing-window incremental would need unadjusted prices + an adjustment factor stored separately; deferred.)
 """
 from __future__ import annotations
 
@@ -71,7 +71,7 @@ def extend_membership(end: str | None = None) -> tuple[pd.DataFrame, list[str], 
 
 def assert_pull_healthy(summary: pd.DataFrame, n_union: int, min_ok_fraction: float = 0.98) -> float:
     """Return the OK fraction of a pull summary; RAISE if it falls below `min_ok_fraction`
-    (a degraded pull would leave a mixed-基准 lake -- see update_daily_bars)."""
+    (a degraded pull would leave a mixed-basis lake -- see update_daily_bars)."""
     ok = int((summary["status"] == "ok").sum()) if len(summary) else 0
     frac = ok / n_union if n_union else 0.0
     if frac < min_ok_fraction:
@@ -84,7 +84,7 @@ def assert_pull_healthy(summary: pd.DataFrame, n_union: int, min_ok_fraction: fl
 
 def update_daily_bars(union: list[str], end: str | None = None,
                       min_ok_fraction: float = 0.98) -> pd.DataFrame:
-    """Full re-pull of 前复权 daily bars for `union` over [BACKTEST_START, end] (overwrites;
+    """Full re-pull of forward-adjusted daily bars for `union` over [BACKTEST_START, end] (overwrites;
     re-basing-safe -- see module docstring). Returns the pull summary.
 
     DATA-INTEGRITY GATE (for unattended daily operation): a common BaoStock failure is login

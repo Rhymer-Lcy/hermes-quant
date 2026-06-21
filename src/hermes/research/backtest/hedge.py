@@ -1,9 +1,9 @@
-"""Index-futures (IF, 沪深300 股指期货) short overlay -- hedge the long HS300 book's systematic
+"""Index-futures (IF, CSI 300 index futures) short overlay -- hedge the long HS300 book's systematic
 market beta. This is the ONE lever shown able to cut the systematic ~-33% drawdown; selection,
 weighting, factor diversification, universe, and cadence are all exhausted (docs/risk_control.md).
 
 Faithful overlay on an existing long-book equity curve:
-  - short N INTEGER contracts (CFFEX 沪深300 multiplier = ¥300/index-point), N reset each rebalance
+  - short N INTEGER contracts (CFFEX CSI 300 multiplier = ¥300/index-point), N reset each rebalance
     to round(hedge_ratio * total_equity / (index * mult));
   - daily futures P&L = -N * mult * Δindex flows to a cash sleeve; total = long_book + Σ fut_pnl - costs;
   - LOT GRANULARITY is first-class: 1 IF contract ≈ index*300 ≈ ¥1.4M notional, so a hedge needs an
@@ -13,7 +13,7 @@ Faithful overlay on an existing long-book equity curve:
 
 `annual_cost` brackets futures-specific frictions (commission + roll/basis carry) as a drag on the
 hedge notional. NOTE: the hedge leg here is the HS300 INDEX return (the beta being removed) -- the
-dominant term; real IF carries a basis (post-2015 IF traded at a deep 贴水/discount, a genuine
+dominant term; real IF carries a basis (post-2015 IF traded at a deep discount, a genuine
 NEGATIVE carry for a short), so sweep annual_cost (e.g. 0/2/4%/yr) to bracket it. Using actual IF
 futures returns (basis/roll embedded) is the documented gold-standard refinement.
 """
@@ -22,7 +22,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-IF_MULT = 300   # CFFEX 沪深300 股指期货: ¥300 per index point
+IF_MULT = 300   # CFFEX CSI 300 index futures: ¥300 per index point
 
 
 def hedge_overlay(long_equity: pd.Series, index_close: pd.Series, hedge_ratio: float, *,

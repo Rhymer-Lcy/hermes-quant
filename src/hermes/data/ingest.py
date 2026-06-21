@@ -1,6 +1,6 @@
 """BaoStock -> adjusted parquet data lake: daily-bar ingestion utilities.
 
-`pull_universe` pulls 前复权 daily bars for a list of codes into data/parquet/daily/.
+`pull_universe` pulls forward-adjusted daily bars for a list of codes into data/parquet/daily/.
 The survivorship-bias fix (point-in-time HS300 membership and the union of all names
 ever in the index) lives in hermes.data.membership; the union it produces is the
 universe pulled here. There is intentionally no current-membership pull -- that would
@@ -17,8 +17,8 @@ from .sources import baostock_source as bss
 BACKTEST_START = "2015-01-01"
 BACKTEST_END = "2025-12-31"
 
-# Per-board daily price-limit (涨跌停) magnitude -- needed by the friction-faithful
-# backtest gate (orders at the limit must not fill).
+# Per-board daily price-limit magnitude (price limit, daily ±10%/±20% limit) -- needed
+# by the friction-faithful backtest gate (orders at the limit must not fill).
 PRICE_LIMIT_PCT = {"Main": 0.10, "STAR": 0.20, "ChiNext": 0.20, "BSE": 0.30}
 
 
@@ -26,16 +26,16 @@ def board_of(code: str) -> str:
     """Map a BaoStock code ('sh.600000') to its board, for price-limit rules."""
     num = code.split(".")[-1]
     if num.startswith("688"):
-        return "STAR"          # 科创板 ±20%
+        return "STAR"          # STAR Market ±20%
     if num.startswith(("300", "301")):
-        return "ChiNext"       # 创业板 ±20%
+        return "ChiNext"       # ChiNext ±20%
     if num.startswith(("4", "8", "920")):
-        return "BSE"           # 北交所 ±30%
-    return "Main"              # 主板 ±10%
+        return "BSE"           # Beijing Stock Exchange ±30%
+    return "Main"              # Main Board ±10%
 
 
 def pull_universe(codes, start: str = BACKTEST_START, end: str = BACKTEST_END) -> pd.DataFrame:
-    """Pull 前复权 daily bars per code -> data/parquet/daily/<code>.parquet.
+    """Pull forward-adjusted daily bars per code -> data/parquet/daily/<code>.parquet.
 
     Manages its own BaoStock session. Records per-symbol status and continues on
     error. Returns a summary DataFrame (code, rows, status).

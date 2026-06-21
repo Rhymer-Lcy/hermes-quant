@@ -8,9 +8,10 @@ own namespace and data, never touching the validated EOD engine. If it ever beco
 trading system, fork it out then.
 
 Scope decisions (see docs):
-  - Instruments: 股指期货 IF/IC (CFFEX) -- T+0, and directly relevant to a future HEDGE OVERLAY that
-    could cut the monthly book's systematic -33% drawdown; plus 商品期货 and 可转债 (both T+0).
-  - Data: minute bars via AKShare (FREE, no token) -- futures via Sina (验证可用: futures_zh_minute_sina
+  - Instruments: stock index futures IF/IC (CFFEX) -- T+0, and directly relevant to a future HEDGE OVERLAY
+    that could cut the monthly book's systematic -33% drawdown; plus commodity futures and convertible bonds
+    (both T+0).
+  - Data: minute bars via AKShare (FREE, no token) -- futures via Sina (verified working: futures_zh_minute_sina
     returns datetime/OHLC/volume/hold). CAVEAT: free minute history is SHALLOW (~recent window) and
     scraper-fragile; deep tick/L2 needs a paid vendor.
   - Engine: vnpy (already forked in external/) is the base for futures intraday backtesting -- it is

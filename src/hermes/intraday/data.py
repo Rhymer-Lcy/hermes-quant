@@ -16,10 +16,10 @@ INTRADAY_DIR = PARQUET_DIR / "intraday"
 
 
 def futures_minute(symbol: str, period: str = "5") -> pd.DataFrame:
-    """Sina intraday bars for one futures contract, e.g. 'IF2609' (沪深300 期货), 'IC2609'
-    (中证500 期货), 'rb2610' (螺纹钢). `period` in {'1','5','15','30','60'} minutes.
+    """Sina intraday bars for one futures contract, e.g. 'IF2609' (CSI 300 futures), 'IC2609'
+    (CSI 500 futures), 'rb2610' (rebar). `period` in {'1','5','15','30','60'} minutes.
 
-    Returns a datetime-indexed frame: [open, high, low, close, volume, hold(持仓量)]. FREE, no
+    Returns a datetime-indexed frame: [open, high, low, close, volume, hold (open interest)]. FREE, no
     token. Validated: futures_zh_minute_sina('IF2609','5') -> 1023 rows. CAVEAT: Sina serves only
     a SHALLOW recent window (~1000+ bars), not deep history -- enough to prototype signals; deep
     minute/tick history needs a paid vendor."""
@@ -52,7 +52,7 @@ def accumulate_futures_minute(symbol: str = "IF0", periods: tuple[str, ...] = ("
 
 
 def cb_minute(symbol: str, period: str = "5") -> pd.DataFrame:
-    """Convertible-bond (可转债, T+0) intraday bars, e.g. 'sh113537'. `period` in
+    """Convertible-bond (T+0) intraday bars, e.g. 'sh113537'. `period` in
     {'1','5','15','30','60'}. FREE, no token (EastMoney via AKShare -- may be proxy-blocked in
     sandboxed environments; works on a normal connection). Returns a datetime-indexed OHLCV frame."""
     import akshare as ak

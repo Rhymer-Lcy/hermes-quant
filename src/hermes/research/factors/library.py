@@ -120,15 +120,15 @@ def roe(pe_ttm: pd.DataFrame, pb_mrq: pd.DataFrame) -> pd.DataFrame:
 
 
 def float_cap(amount: pd.DataFrame, turn_pct: pd.DataFrame) -> pd.DataFrame:
-    """Free-float market cap (元), reconstructed from the daily lake -- no Tushare needed.
+    """Free-float market cap (CNY), reconstructed from the daily lake -- no Tushare needed.
 
     BaoStock `turn` is the FREE-FLOAT turnover rate in PERCENT (day volume / free-float
-    shares * 100) and `amount` is the day's traded value in 元, so
+    shares * 100) and `amount` is the day's traded value in CNY, so
         float_cap = amount / (turn/100)   (= price * free-float shares)
     recovers free-float cap from fields already in the daily bars. Bars with turn<=0
     (limit-up no-volume, data gaps; ~2% of bars) -> NaN. PIT-safe: same-day inputs only,
     no lookahead, no announcement lag. This is FREE-float (not total) cap -- the right base
-    for a cross-sectional size factor. Validated 2025-12-31: 600519≈1.73万亿, 601318≈7312亿."""
+    for a cross-sectional size factor. Validated 2025-12-31: 600519≈¥1.73 trillion, 601318≈¥731.2 billion."""
     return (amount / (turn_pct / 100.0)).where(turn_pct > 0)
 
 

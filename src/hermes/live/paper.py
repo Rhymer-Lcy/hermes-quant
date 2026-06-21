@@ -1,5 +1,5 @@
 """EOD paper trading: run the DEPLOYED strategy forward on daily closes, recording every
-fill in an idempotent ledger (live.ledger). At capital tiers (5千–50万) to expose the
+fill in an idempotent ledger (live.ledger). At capital tiers (¥5k–¥500k) to expose the
 small-account friction the research engine flags via avg_names_held.
 
 Architecture (option A, monthly EOD): the research backtest engine IS the strategy brain.
@@ -67,7 +67,7 @@ def live_step(seed_cash: float, as_of: str | None = None, *, spec: DeployedStrat
     """Run the DEPLOYED strategy forward through `as_of` (default: latest bar on disk) on the
     CURRENT data lake, and return today's report. Idempotent: the ledger is recomputed from
     the immutable seed over all data each call (see replay) -- re-running a date reproduces it,
-    and 前复权 re-basing is absorbed because the whole curve is recomputed on one basis.
+    and forward-adjusted re-basing is absorbed because the whole curve is recomputed on one basis.
 
     Reads the lake refreshed by live.feed; uses live.strategy.deployed_signal (the SAME spec
     research uses). Persists the equity curve, full trade log, and a JSON report under PAPER_DIR.

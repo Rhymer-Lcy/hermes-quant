@@ -2,17 +2,18 @@
 accounts — the whole point of the friction gate is to make them explicit.
 
 Retail defaults, mid-2026:
-  - commission (佣金):    万2.5 (0.025%), 最低 5 元/笔
-  - stamp tax (印花税):    万5 (0.05%), SELL side only (halved 2023-08)
-  - transfer fee (过户费): 万0.1 (0.001%), both sides
-  - slippage (滑点):       modeled as bps on the execution price, both sides
-  - lot size (一手):       100 shares
+  - commission:    2.5 bps (0.025%), minimum ¥5 per trade
+  - stamp tax:     5 bps (0.05%), SELL side only (halved 2023-08)
+  - transfer fee:  0.1 bps (0.001%), both sides
+  - slippage:      modeled as bps on the execution price, both sides
+  - lot size:      100 shares
 
-The 佣金 rate is the broker's ALL-IN quote, i.e. it already includes the exchange/
-regulator 规费 (经手费 ~万0.341 + 证管费 ~万0.2 ≈ 万0.541 round-trip) that brokers
-collect bundled into commission -- so net commission is ~万1.96 + 规费. We do NOT add 规费
-again on top (double-counting). 万2.5 all-in is a conservative retail level (many accounts
-negotiate 万1.5-万2). NOT modeled: 涨跌停 no-fill (rare for a monthly HS300 rebalance;
+The commission rate is the broker's ALL-IN quote, i.e. it already includes the exchange/
+regulator handling and supervision fees (handling fee ~0.341 bps + securities supervision
+fee ~0.2 bps ≈ 0.541 bps round-trip) that brokers collect bundled into commission -- so net
+commission is ~1.96 bps + regulatory fees. We do NOT add the regulatory fees again on top
+(double-counting). 2.5 bps all-in is a conservative retail level (many accounts negotiate
+1.5-2 bps). NOT modeled: price-limit no-fill (rare for a monthly HS300 rebalance;
 cross-checked in RQAlpha, which does model it) -- see docs/engine_validation.md.
 """
 from __future__ import annotations
@@ -22,12 +23,12 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class AShareCosts:
-    commission_rate: float = 2.5e-4   # 佣金 万2.5
-    min_commission: float = 5.0       # 每笔最低 5 元
-    stamp_tax_sell: float = 5e-4      # 印花税 万5,仅卖出
-    transfer_fee_rate: float = 1e-5   # 过户费 万0.1,双向
-    slippage_bps: float = 5.0         # 滑点,单边,基点
-    lot_size: int = 100               # 一手 = 100 股
+    commission_rate: float = 2.5e-4   # commission, 2.5 bps
+    min_commission: float = 5.0       # minimum ¥5 per trade
+    stamp_tax_sell: float = 5e-4      # stamp tax, 5 bps, sell side only
+    transfer_fee_rate: float = 1e-5   # transfer fee, 0.1 bps, both sides
+    slippage_bps: float = 5.0         # slippage, one side, basis points
+    lot_size: int = 100               # one lot = 100 shares
 
     def _commission(self, turnover: float) -> float:
         if turnover <= 0:

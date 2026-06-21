@@ -7,7 +7,7 @@ Use the `session()` context manager to guarantee logout even on error.
     with bss.session():
         df = bss.daily_bars("sh.600000", "2015-01-01", "2025-12-31")
 
-adjustflag: "1" = 后复权, "2" = 前复权, "3" = 不复权.
+adjustflag: "1" = backward-adjusted, "2" = forward-adjusted, "3" = unadjusted.
 """
 from __future__ import annotations
 
@@ -69,7 +69,7 @@ def daily_bars(code: str, start: str, end: str, adjustflag: str = "2") -> pd.Dat
 
 
 def stock_industry(date: str | None = None) -> pd.DataFrame:
-    """Shenwan (申万) industry classification, FREE. Call inside `session()`.
+    """Shenwan industry classification, FREE. Call inside `session()`.
 
     `date=None` returns the latest snapshot; `date='2020-06-30'` returns the snapshot
     effective at/just before that date (DATE-AWARE -> point-in-time capable). Columns:
@@ -90,8 +90,8 @@ def stock_industry(date: str | None = None) -> pd.DataFrame:
 
 
 def index_close(code: str, start: str, end: str) -> pd.Series:
-    """Daily close for an index (e.g. 'sh.000300' = 沪深300). Call inside `session()`.
-    Indices have no valuation/复权 fields, so only date+close are requested."""
+    """Daily close for an index (e.g. 'sh.000300' = CSI 300). Call inside `session()`.
+    Indices have no valuation/adjustment fields, so only date+close are requested."""
     rs = bs.query_history_k_data_plus(code, "date,close", start_date=start, end_date=end,
                                       frequency="d")
     if rs.error_code != "0":

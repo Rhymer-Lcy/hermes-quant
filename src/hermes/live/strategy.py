@@ -28,15 +28,15 @@ class DeployedStrategy:
 
 DEPLOYED = DeployedStrategy()
 
-# Paper-trading capital tiers (元), grouped small / medium / large. Chosen to be informative,
+# Paper-trading capital tiers (CNY), grouped small / medium / large. Chosen to be informative,
 # not round-number filler:
-#   small  [1万, 3万, 5万]  -- brackets the feasibility knee: 1万 is INFEASIBLE (100-share lots +
-#                            5元 min commission prevent a 10-name book), 3万 is the floor, 5万 is
+#   small  [¥10k, ¥30k, ¥50k]  -- brackets the feasibility knee: ¥10k is INFEASIBLE (100-share lots
+#                            + ¥5 min commission prevent a 10-name book), ¥30k is the floor, ¥50k is
 #                            comfortably viable. This is the research-critical band.
-#   medium [10万, 50万]     -- the working regime (book fully diversified).
-#   large  [100万, 500万]   -- capacity reference; the strategy SATURATES by ~10万 (these add no
+#   medium [¥100k, ¥500k]     -- the working regime (book fully diversified).
+#   large  [¥1M, ¥5M]   -- capacity reference; the strategy SATURATES by ~¥100k (these add no
 #                            new behaviour) and assumes negligible market impact -- true for HS300
-#                            large caps at <=50万/name, but NOT modeled (flat 5bps slippage, no
+#                            large caps at <=¥500k/name, but NOT modeled (flat 5bps slippage, no
 #                            size-dependent impact term). Read them as "does it scale", not research.
 CAPITAL_TIERS: dict[str, list[int]] = {
     "small": [10_000, 30_000, 50_000],

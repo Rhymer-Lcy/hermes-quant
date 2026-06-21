@@ -8,10 +8,10 @@ models). It emits signals/scores; it does NOT place orders — execution lives i
 # Capital tiers (RMB) for cross-account analysis. Chosen to span the regimes where
 # A-share frictions change character, aligned with real thresholds:
 #   10_000     small  -- ~1 lot ≈ whole account; diversification impossible
-#   50_000     small  -- 100-share lot + 5元 min commission dominate
+#   50_000     small  -- 100-share lot + ¥5 min commission dominate
 #   100_000    medium -- common miniQMT live threshold; ~5-10 names feasible
-#   500_000    medium -- 合格投资者 / legacy QMT threshold
+#   500_000    medium -- qualified investor / legacy QMT threshold
 #   1_000_000  large  -- full diversification; costs ~proportional
-#   3_000_000  large  -- 专业投资者 threshold
+#   3_000_000  large  -- professional investor threshold
 CAPITAL_TIERS = [10_000, 50_000, 100_000, 500_000, 1_000_000, 3_000_000]
 
