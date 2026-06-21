@@ -5,8 +5,9 @@
             small caps just dilute HS300? (A6 showed CSI500 alone is far worse.)
 
 Deployed signal (value + 1m-reversal 5/1) throughout; PIT membership; A-share frictions; capped to
-the common 2015-2025 window. CSI500/combined runs use 涨跌停 ON + ST filtered (the small-cap-rigorous
-treatment); HS300-alone is the deployed baseline (no limits -- they don't bind for large caps).
+the common 2015-2025 window. CSI500/combined runs use price limit (daily ±10%/±20% limit) ON + ST filtered
+(the small-cap-rigorous treatment); HS300-alone is the deployed baseline (no limits -- they don't bind for
+large caps).
 
     python scripts/cadence_universe_study.py
 

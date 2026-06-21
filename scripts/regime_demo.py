@@ -1,5 +1,5 @@
 """Step A1: a market-regime (index trend) filter on the value factor, to cut the -33%
-drawdown. Compares earnings-yield (value) WITH vs WITHOUT a 沪深300 200-day MA exposure
+drawdown. Compares earnings-yield (value) WITH vs WITHOUT a CSI 300 200-day MA exposure
 filter -- survivorship-free (PIT) and with A-share frictions.
 
     python scripts/regime_demo.py

@@ -2,7 +2,7 @@
 systematic ~-33% drawdown, and do QUALITY + factor diversification help here (unlike on HS300,
 where they failed because value=banks)?
 
-Rigorous for the small-cap universe: 涨跌停 no-fill ON (limit_flags), ST names filtered out
+Rigorous for the small-cap universe: price-limit no-fill ON (limit_flags), ST names filtered out
 (±5% limit + blow-up risk), A-share frictions, PIT CSI500 membership, full 2015-2025 window
 (both universes capped to the same window for a fair head-to-head). All factors
 restrict_to_universe'd to PIT members BEFORE blend (IRON RULE 1); n_hold swept (a wider universe
@@ -61,7 +61,7 @@ def main() -> None:
     ep = R(fl.earnings_yield(pe)); q = R(fl.roe(pe, pb))
     rev = R(-fl.trailing_return(close, 20)); mom = R(fl.momentum(close, 120, 20))
     lowvol = R(fl.low_vol(close, 120))
-    lb = limit_flags(close, pre)                            # 涨跌停 no-fill panel (CSI500)
+    lb = limit_flags(close, pre)                            # price-limit no-fill panel (CSI500)
 
     with bss.session():
         ind = bss.stock_industry()
@@ -87,7 +87,7 @@ def main() -> None:
     hs_rev = fl.restrict_to_universe(-fl.trailing_return(hs_close, 20), hs_asof)
     hs = signal_portfolio_backtest(hs_close, fl.blend([hs_ep, hs_rev], [5, 1]), CAP, 10, members_asof=hs_asof)
 
-    print(f"\n2015-2025 @ {CAP:,}; CSI500 with 涨跌停 ON + ST filtered; NET/GROSS Calmar, maxDD, secHHI:")
+    print(f"\n2015-2025 @ {CAP:,}; CSI500 with price limit ON + ST filtered; NET/GROSS Calmar, maxDD, secHHI:")
     print(f"  {'config':>30} {'CAGR':>7} {'maxDD':>7} {'netCal':>7} {'grsCal':>7} {'secHHI':>7}")
     print(f"  {'HS300 value+rev 5/1 (deployed)':>30} {hs.cagr:>+7.1%} {hs.max_drawdown:>7.1%} "
           f"{cal(hs):>7.2f} {'--':>7} {'--':>7}")

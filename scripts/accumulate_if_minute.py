@@ -1,4 +1,4 @@
-"""Daily IF (沪深300 股指期货) minute-bar accumulator -- run after market close on a trading day.
+"""Daily IF (CSI 300 stock index futures) minute-bar accumulator -- run after market close on a trading day.
 
 Sina only serves a shallow recent window (~1023 bars), so this UNIONs each day's pull into a
 growing parquet lake (data/parquet/intraday/), building multi-year minute history forward. This is
@@ -10,7 +10,7 @@ atomic writes; safe to re-run or miss a day within the lookback window.
 """
 from hermes.intraday.data import accumulate_futures_minute
 
-SYMBOLS = ["IF0"]            # IF0 = 沪深300 main continuous; extensible to IC0/IH0 if breadth wanted
+SYMBOLS = ["IF0"]            # IF0 = CSI 300 main continuous; extensible to IC0/IH0 if breadth wanted
 
 
 def main() -> None:

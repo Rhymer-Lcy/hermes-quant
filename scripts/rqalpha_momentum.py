@@ -3,8 +3,8 @@
 Runs the SAME strategy -- monthly equal-weight top-N HS300 by trailing return -- on
 RQAlpha's battle-tested A-share engine + RiceQuant's own price data, but driven by
 OUR BaoStock point-in-time HS300 membership (the free bundle's native index_components
-needs paid rqdatac). RQAlpha natively handles dividends/splits, 涨跌停 no-fill, T+1,
-印花税, 100-share lots, and per-trade minimum commission -- so this is an INDEPENDENT
+needs paid rqdatac). RQAlpha natively handles dividends/splits, price-limit no-fill, T+1,
+stamp tax, 100-share lots, and per-trade minimum commission -- so this is an INDEPENDENT
 engine + price-data + corporate-action validation of the hand-rolled PIT backtest
 (which produced ~ -7%/yr, survivorship-free), holding the membership definition fixed.
 

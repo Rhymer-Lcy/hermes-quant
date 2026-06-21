@@ -41,12 +41,12 @@ def main() -> None:
     turn = load_close_panel(codes=union, field="turn")
     cap = fl.float_cap(amount, turn)
 
-    # Sanity-check the free reconstruction (in 亿元) against known mega-caps.
+    # Sanity-check the free reconstruction (in ×10^8 CNY) against known mega-caps.
     pdt = cap.index[cap.index <= pd.Timestamp("2025-12-31")][-1]
-    print(f"free-float cap reconstruction @ {pdt.date()} (亿元), {cap.notna().sum().sum() / amount.notna().sum().sum():.1%} bar coverage:")
+    print(f"free-float cap reconstruction @ {pdt.date()} (×10^8 CNY), {cap.notna().sum().sum() / amount.notna().sum().sum():.1%} bar coverage:")
     for c in ["sh.600000", "sh.601318", "sh.600519"]:
         if c in cap.columns and pd.notna(cap.loc[pdt, c]):
-            print(f"  {c}: {cap.loc[pdt, c] / 1e8:,.0f} 亿")
+            print(f"  {c}: {cap.loc[pdt, c] / 1e8:,.0f} ×10^8")
 
     ep = fl.earnings_yield(load_close_panel(codes=union, field="peTTM"))
     size = fl.small_size(cap)                         # higher = smaller cap

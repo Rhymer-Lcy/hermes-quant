@@ -6,8 +6,8 @@ Two things this shows:
   1. ANTI-SKEW GATE: the ledger equity (reconstructed from the seed + folded fills) must
      equal the research engine's equity bar-for-bar. If it ever diverges, paper trading has
      drifted from research -- the run ASSERTS equality and fails loudly otherwise.
-  2. SMALL-ACCOUNT FRICTION: avg_names_held vs the target 10. At 5千/1万 the 100-share lot +
-     5元 min commission make a 10-name book infeasible; the tier sweep makes that explicit
+  2. SMALL-ACCOUNT FRICTION: avg_names_held vs the target 10. At ¥5k/¥10k the 100-share lot +
+     ¥5 min commission make a 10-name book infeasible; the tier sweep makes that explicit
      (the same diagnostic the backtest engine exposes), which is the point of paper-trading
      across tiers before risking live money.
 
@@ -50,7 +50,7 @@ def main() -> None:
     print("\nParity holds at every tier: paper P&L is the research engine's P&L, reconstructed "
           "from the immutable seed -- no factor/sizing re-implementation, so no train/serve skew. "
           "avg_names_held collapses below the 10-name target at the small tiers (100-share lots + "
-          "5元 min commission) -- the small-account problem, made concrete before any live money. "
+          "¥5 min commission) -- the small-account problem, made concrete before any live money. "
           "Next: a daily live_step that appends today's real EOD bar and extends the ledger.")
 
 

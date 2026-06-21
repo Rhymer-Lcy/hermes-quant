@@ -1,10 +1,10 @@
-"""IF (沪深300 股指期货) short-hedge overlay on the deployed HS300 monthly book: how much does
+"""IF (CSI 300 stock index futures) short-hedge overlay on the deployed HS300 monthly book: how much does
 hedging the market beta cut the systematic -33% drawdown, and at what cost to return?
 
 A full hedge turns the long book into a market-NEUTRAL book whose return is the value+reversal
 spread OVER HS300 -- trading absolute return + market risk for pure alpha + far lower drawdown.
 Swept: hedge_ratio 0..1 x futures annual_cost {0,2,4%} (brackets roll/basis carry -- post-2015 IF
-ran a deep 贴水/discount = real negative carry for a short). Hedge leg = HS300 index return (the
+ran a deep discount = real negative carry for a short). Hedge leg = HS300 index return (the
 beta removed); integer IF contracts (¥300/pt). 2015-2025. `python scripts/hedge_study.py`
 """
 import numpy as np
@@ -39,7 +39,7 @@ def main() -> None:
     with bss.session():
         index = bss.index_close("sh.000300", "2015-01-01", END)
 
-    # Long book at 500万 (contract granularity is acceptable there; see the tier table below).
+    # Long book at ¥5M (contract granularity is acceptable there; see the tier table below).
     book = signal_portfolio_backtest(close, sig, 5_000_000, 10, members_asof=asof).equity
 
     # --- DIAGNOSTIC: is the -33% market-beta (hedgeable) or value-style (not)? ---
@@ -52,7 +52,7 @@ def main() -> None:
           f"{max_drawdown(book):.1%} -- if WORSE, the market beta CUSHIONS the drawdown; the -33% is "
           f"value-STYLE, not hedgeable by an index short.\n")
 
-    print("IF short-hedge on deployed HS300 book @ 500万 (2015-2025); hedge leg = HS300 index return")
+    print("IF short-hedge on deployed HS300 book @ ¥5M (2015-2025); hedge leg = HS300 index return")
     print(f"  {'hedge':>6} {'cost/yr':>7} {'CAGR':>7} {'maxDD':>7} {'Calmar':>7} {'annVol':>7} {'~contr':>7} {'effRatio':>8}")
     for h in (0.0, 0.25, 0.5, 0.75, 1.0):
         for cost in (0.0, 0.02, 0.04):

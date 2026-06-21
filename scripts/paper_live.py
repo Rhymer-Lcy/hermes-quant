@@ -4,7 +4,7 @@
   python scripts/paper_live.py --no-refresh     # skip the data pull; recompute on current lake
   python scripts/paper_live.py --as-of 2026-03-31 --no-refresh   # historical replay to a date
 
-It (1) refreshes the lake from BaoStock (membership + 前复权 daily bars; same source as
+It (1) refreshes the lake from BaoStock (membership + forward-adjusted daily bars; same source as
 research), then (2) runs the DEPLOYED strategy forward via live.paper.live_step at each
 capital tier, recomputing the idempotent ledger from the seed, and (3) prints + persists a
 daily report (equity, today's trades, drawdown, effective diversification) under results/paper/.
@@ -27,11 +27,11 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--no-refresh", action="store_true", help="skip the BaoStock data pull")
     ap.add_argument("--as-of", default=None, help="recompute through this date (YYYY-MM-DD)")
-    ap.add_argument("--tiers", type=int, nargs="*", default=ALL_TIERS, help="capital tiers (元)")
+    ap.add_argument("--tiers", type=int, nargs="*", default=ALL_TIERS, help="capital tiers (CNY)")
     args = ap.parse_args()
 
     if not args.no_refresh:
-        print("refreshing lake from BaoStock (membership + 前复权 daily bars)...")
+        print("refreshing lake from BaoStock (membership + forward-adjusted daily bars)...")
         refresh(end=args.as_of)
 
     print(f"\ndeployed = value + 1m-reversal {int(DEPLOYED.value_weight)}/"

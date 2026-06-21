@@ -1,7 +1,7 @@
-"""Build the CSI500 (中证500) survivorship-free dataset for the universe-expansion line.
+"""Build the CSI 500 survivorship-free dataset for the universe-expansion line.
 
 (1) month-end PIT membership via BaoStock query_zz500_stocks (free + PIT), (2) incrementally
-pull 前复权 daily bars for the union names NOT already on disk (the HS300 overlap is reused).
+pull forward-adjusted daily bars for the union names NOT already on disk (the HS300 overlap is reused).
 Free, no token. The long pole is the per-name BaoStock pull -- run it once, in the background.
 
     python scripts/build_csi500_dataset.py
