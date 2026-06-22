@@ -1,7 +1,7 @@
 """Pure data helpers: board mapping, ts_code conversion, PIT membership as-of."""
 import pandas as pd
 
-from hermes.data.ingest import PRICE_LIMIT_PCT, board_of
+from hermes.data.ingest import PRICE_LIMIT_PCT, _is_rebased, board_of
 from hermes.data.membership import membership_lookup
 from hermes.data.sources.tushare_source import to_ts_code
 
@@ -38,3 +38,10 @@ def test_membership_lookup_asof_semantics():
     assert asof(pd.Timestamp("2020-02-01")) == {"a", "b"}      # latest snapshot <= date
     assert asof(pd.Timestamp("2020-02-28")) == {"c"}           # exactly on the new snapshot
     assert asof(pd.Timestamp("2020-06-01")) == {"c"}           # after, carries forward
+
+
+def test_is_rebased_detects_dividend_only():
+    # incremental refresh appends unless the forward-adjusted series re-based (dividend/split)
+    assert _is_rebased(10.0, 9.70) is True            # ex-dividend rescaled the whole history
+    assert _is_rebased(10.0, 10.0) is False           # unchanged -> safe to append the new bars
+    assert _is_rebased(10.0, 10.0 + 1e-9) is False    # float noise, not a re-base

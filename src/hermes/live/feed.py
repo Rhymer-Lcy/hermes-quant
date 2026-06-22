@@ -4,15 +4,15 @@ research lake uses (BaoStock), so paper data == research data (no source skew).
 Two refreshes, run after market close on a trading day:
   - extend_membership(): pull HS300 month-end snapshots NEWER than the last stored one and
     append; rebuild the all-time union (so 2026 entrants get added without losing history).
-  - update_daily_bars(): re-pull forward-adjusted daily bars for the union through `end`.
+  - update_daily_bars(): incrementally refresh forward-adjusted daily bars for the union through `end`.
 
-WHY a FULL re-pull, not an append: forward-adjusted prices are RE-BASED across the
-entire history whenever a dividend/split occurs, so appending only new days would mix two
-adjustment bases in one series. A full overwrite (pull_universe already overwrites per code)
-keeps the whole lake on ONE consistent basis; live.paper then recomputes the ledger wholesale
-from the seed, so the equity curve is always self-consistent. Cost: a few minutes of free
-BaoStock calls per run -- fine for a monthly strategy refreshed once a trading day. (A
-trailing-window incremental would need unadjusted prices + an adjustment factor stored separately; deferred.)
+INCREMENTAL refresh, re-base-safe: forward-adjusted prices are RE-BASED across the entire history
+whenever a dividend/split occurs, so a blind append would mix two bases in one series. Instead each
+code appends only its new bars UNLESS its overlap bar's close changed on re-pull (which signals a
+re-base) -- those few names are re-pulled in full (see ingest.pull_universe_incremental). This keeps
+the whole lake on ONE consistent basis while turning the daily run from a ~40-min full re-pull into
+minutes (and a no-op re-run into seconds); live.paper then recomputes the ledger wholesale from the
+seed, so the equity curve stays self-consistent.
 """
 from __future__ import annotations
 
@@ -85,18 +85,16 @@ def assert_pull_healthy(summary: pd.DataFrame, n_union: int, min_ok_fraction: fl
 
 def update_daily_bars(union: list[str], end: str | None = None,
                       min_ok_fraction: float = 0.98) -> pd.DataFrame:
-    """Full re-pull of forward-adjusted daily bars for `union` over [BACKTEST_START, end] (overwrites;
-    re-basing-safe -- see module docstring). Returns the pull summary.
+    """INCREMENTALLY refresh forward-adjusted daily bars for `union` through `end` (appends new bars;
+    full-re-pulls only re-based names -- see ingest.pull_universe_incremental). Returns the summary.
 
-    DATA-INTEGRITY GATE (for unattended daily operation): a common BaoStock failure is login
-    succeeding then names timing out mid-batch, which would leave those names on their prior
-    re-basis while the rest are re-based -- a mixed-adjustment lake. pull_universe records-and-
-    continues (correct for a one-shot historical ingest), so here we RAISE if the OK fraction
-    drops below `min_ok_fraction`. Raising aborts refresh() before any live report is written,
-    so the auto-maintained record never computes on a degraded lake; the next clean run re-pulls
-    the whole union and self-heals."""
+    DATA-INTEGRITY GATE (for unattended daily operation): a BaoStock pull can have names time out
+    mid-batch, leaving them stale while the rest advance -- a mixed lake. The pull records-and-
+    continues per code, so here we RAISE if the OK fraction drops below `min_ok_fraction`. Raising
+    aborts refresh() before any live report is written, so the auto-maintained record never computes
+    on a degraded lake; the next clean run self-heals."""
     end = end or _today()
-    summary = ingest.pull_universe(union, ingest.BACKTEST_START, end)
+    summary = ingest.pull_universe_incremental(union, ingest.BACKTEST_START, end)
     ingest.write_pull_summary(summary, name="live_refresh")
     assert_pull_healthy(summary, len(union), min_ok_fraction)
     return summary
