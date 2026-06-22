@@ -10,6 +10,14 @@ $py = if ($env:HERMES_PYTHON) { $env:HERMES_PYTHON } else { "D:\Anaconda3\envs\h
 $logdir = Join-Path $repo "results\paper\logs"
 New-Item -ItemType Directory -Force -Path $logdir | Out-Null
 $log = Join-Path $logdir ("if_accum_{0:yyyyMMdd}.log" -f (Get-Date))
+# Capture the child's output to a UTF-8 log with no stream-object corruption: PYTHONIOENCODING
+# makes Python emit UTF-8; Start-Process writes those raw bytes to temp files (no PowerShell
+# re-encoding and no stderr-as-error wrapping); both are then appended as UTF-8, in order.
+$env:PYTHONIOENCODING = "utf-8"
 "=== run $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') ===" | Out-File -FilePath $log -Append -Encoding utf8
-& $py (Join-Path $repo "scripts\accumulate_if_minute.py") *>> $log
-exit $LASTEXITCODE
+$out = [System.IO.Path]::GetTempFileName(); $err = [System.IO.Path]::GetTempFileName()
+$proc = Start-Process -FilePath $py -ArgumentList "`"$(Join-Path $repo 'scripts\accumulate_if_minute.py')`"" `
+  -NoNewWindow -Wait -PassThru -RedirectStandardOutput $out -RedirectStandardError $err
+Get-Content -LiteralPath $out, $err -Encoding UTF8 | Out-File -FilePath $log -Append -Encoding utf8
+Remove-Item -LiteralPath $out, $err -ErrorAction SilentlyContinue
+exit $proc.ExitCode
