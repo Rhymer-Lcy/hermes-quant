@@ -90,12 +90,16 @@ cannot hold 10 names at all. The strategy saturates by ~¥100k (the large tiers 
 behaviour and assume negligible, unmodeled market impact). Tier-by-tier paper trading exists
 to establish this floor concretely before capital is committed.
 
-**Live paper record (forward).** The deployed ledger is seeded at `PAPER_INCEPTION` (`live.strategy`)
-— invested fully into the current top-N at that day's close — and tracked forward, so each report's
-`total_return` / `max_drawdown` measure performance SINCE inception (facing the unknown), not the
-backtest above. The signal still uses full history (so factor lookbacks are satisfied); only the
-ledger is seeded at inception. The full-history backtest curve is reproducible via
-`live_step(inception=None)` and is archived under `results/backtests/`.
+**Two distinct records.** The same deployed strategy yields two curves — keep them separate:
+
+| record | command | seed | measures | written to |
+|---|---|---|---|---|
+| **paper (forward)** | `paper_live.py` | full capital at `PAPER_INCEPTION`, then forward | return SINCE inception (facing the unknown) | `results/paper/` |
+| **backtest (research)** | `paper_live.py --backtest` | full capital at 2015-01 | the 2015→ historical record | `results/backtests/` |
+
+Both compute identically (recompute-from-seed, one engine); they differ only in the seed date. The
+signal always uses full history so factor lookbacks are satisfied — only the *ledger* is seeded at
+inception. The scheduled daily run is the forward paper record.
 
 ## Operations
 
