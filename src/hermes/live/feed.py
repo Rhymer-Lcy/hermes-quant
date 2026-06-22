@@ -22,6 +22,7 @@ import baostock as bs
 import pandas as pd
 
 from ..data import ingest
+from ..data.lake import load_close_panel
 from ..data.membership import (MEMBERSHIP_PARQUET, UNION_CSV,
                                month_end_trading_dates, rs_to_df)
 from ..data.sources import baostock_source as bss
@@ -101,11 +102,43 @@ def update_daily_bars(union: list[str], end: str | None = None,
     return summary
 
 
+def latest_coverage(panel: pd.DataFrame, members: list[str]) -> tuple[pd.Timestamp, float]:
+    """(lake's latest date, fraction of `members` that carry a bar on it). Pure and testable."""
+    latest = panel.index[-1]
+    cols = [c for c in members if c in panel.columns]
+    cov = float(panel.loc[latest, cols].notna().mean()) if cols else 0.0
+    return latest, cov
+
+
+def current_members(mdf: pd.DataFrame) -> list[str]:
+    """The most recent membership snapshot's codes (the names that should all trade today)."""
+    return sorted(mdf[mdf["date"] == mdf["date"].max()]["code"].unique())
+
+
+def assert_publication_complete(members: list[str], min_coverage: float = 0.90) -> float:
+    """Guard against INCOMPLETE same-day publication. BaoStock posts EOD bars over ~2-3 hours
+    after the close, so a run inside that window finds today's bar for only some names while the
+    rest still end on the prior day; the backtest's right-edge rule would then mistake the
+    not-yet-posted names for delistings and force-liquidate them. If fewer than `min_coverage` of
+    the CURRENT index members carry a bar on the lake's latest date, RAISE -- refusing to compute
+    on a half-published day (the next run, once publication completes, self-heals). The fixed-time
+    schedule already targets the post-publication window; this is the fail-loud backstop."""
+    latest, cov = latest_coverage(load_close_panel(codes=members, field="close"), members)
+    if cov < min_coverage:
+        raise RuntimeError(
+            f"incomplete publication: only {cov:.0%} of current members carry a {latest.date()} "
+            f"bar (< {min_coverage:.0%}); BaoStock is still posting today's EOD data. Refusing to "
+            "update (would mis-liquidate the unposted names); retry when publication completes.")
+    return cov
+
+
 def refresh(end: str | None = None) -> tuple[pd.DataFrame, list[str]]:
-    """One call: extend membership to `end`, then refresh the union's daily bars (failing loud
-    on a degraded pull -- see update_daily_bars). Returns (membership_df, union). Run after
-    market close on a trading day."""
+    """One call: extend membership to `end`, refresh the union's daily bars, and verify the day's
+    publication is complete -- each failing loud (see update_daily_bars / assert_publication_complete)
+    before any live report is written. Returns (membership_df, union). Run after BaoStock has posted
+    the day's EOD data (~2-3 h after close; the task is scheduled in the evening)."""
     end = end or _today()
     mdf, union, _ = extend_membership(end)
     update_daily_bars(union, end)
+    assert_publication_complete(current_members(mdf))
     return mdf, union

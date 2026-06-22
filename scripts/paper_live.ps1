@@ -2,7 +2,7 @@
 # Captures stdout+stderr to a timestamped logfile (Task Scheduler discards them otherwise)
 # and propagates the Python exit code (nonzero on a degraded pull or crash -> visible as the
 # task's "last result"). Register it with:
-#   schtasks /Create /SC WEEKLY /D MON,TUE,WED,THU,FRI /ST 15:35 /TN hermes-paper `
+#   schtasks /Create /SC WEEKLY /D MON,TUE,WED,THU,FRI /ST 19:00 /TN hermes-paper `
 #     /TR "powershell -NoProfile -ExecutionPolicy Bypass -File F:\hermes-quant\scripts\paper_live.ps1"
 # Portable: repo root is derived from this script's location (scripts/ -> repo); the python
 # interpreter is overridable via the HERMES_PYTHON env var (falls back to the conda env path).

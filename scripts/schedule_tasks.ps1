@@ -1,7 +1,10 @@
 # Manage the Hermes scheduled tasks (version-controlled definitions so they are reproducible).
 # Two weekday jobs, isolated from each other:
-#   hermes-paper     15:35  -> paper_live.ps1          (EOD paper trading; updates results/paper/)
+#   hermes-paper     19:00  -> paper_live.ps1          (EOD paper trading; updates results/paper/)
 #   hermes-if-accum  15:40  -> accumulate_if_minute.ps1 (IF minute-bar data accumulation)
+# hermes-paper runs in the evening because BaoStock posts the day's EOD daily bars ~2-3 h after
+# close; an earlier run would either miss today's data or (mid-publication) mis-liquidate the
+# not-yet-posted names. hermes-if-accum stays at 15:40 (Sina minute bars are available at close).
 # Both use StartWhenAvailable: a run missed because the PC was off/asleep/logged-out fires on the
 # next boot/wake (cannot run while powered off; one catch-up, which suffices given recompute-from-seed).
 #
@@ -16,7 +19,7 @@
 param([ValidateSet('register', 'status', 'disable', 'enable', 'remove')] [string]$action = 'status')
 $ErrorActionPreference = 'Stop'
 $tasks = @{
-  'hermes-paper'    = @{ file = Join-Path $PSScriptRoot 'paper_live.ps1';          time = '15:35'; desc = 'Hermes daily EOD paper trading (weekdays 15:35)' }
+  'hermes-paper'    = @{ file = Join-Path $PSScriptRoot 'paper_live.ps1';          time = '19:00'; desc = 'Hermes daily EOD paper trading (weekdays 19:00, after BaoStock posts EOD)' }
   'hermes-if-accum' = @{ file = Join-Path $PSScriptRoot 'accumulate_if_minute.ps1'; time = '15:40'; desc = 'Hermes daily IF minute-bar accumulator (weekdays 15:40)' }
 }
 switch ($action) {

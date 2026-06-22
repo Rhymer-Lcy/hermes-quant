@@ -9,10 +9,11 @@ research), then (2) runs the DEPLOYED strategy forward via live.paper.live_step 
 capital tier, recomputing the idempotent ledger from the seed, and (3) prints + persists a
 daily report (equity, today's trades, drawdown, effective diversification) under results/paper/.
 
-Scheduling (Windows Task Scheduler), weekdays after close (~15:35 CST). Use the wrapper
+Scheduling (Windows Task Scheduler), weekdays in the EVENING (~19:00 CST; BaoStock posts EOD
+~2-3 h after close, so an earlier run would miss today or mis-liquidate not-yet-posted names). Use the wrapper
 scripts/paper_live.ps1 so stdout/stderr are captured to a timestamped log and the exit code
 (nonzero on a degraded pull or crash) is visible as the task's last result:
-  schtasks /Create /SC WEEKLY /D MON,TUE,WED,THU,FRI /ST 15:35 /TN hermes-paper ^
+  schtasks /Create /SC WEEKLY /D MON,TUE,WED,THU,FRI /ST 19:00 /TN hermes-paper ^
     /TR "powershell -NoProfile -ExecutionPolicy Bypass -File F:\\hermes-quant\\scripts\\paper_live.ps1"
 It is safe to re-run: each run recomputes from the seed; a holiday/stale run is flagged (fresh=false).
 """

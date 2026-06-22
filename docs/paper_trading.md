@@ -46,16 +46,20 @@ re-spells the 5:1 value/reversal blend, so they cannot diverge. `test_paper.py` 
    the last few days is indistinguishable from a delisting and may be liquidated early. For HS300 large
    caps, multi-day suspensions are rare and the effect is conservative (cash sits idle until the
    next rebalance, never overstating return). A membership-aware rule (liquidate only when also
-   dropped from the index) is a documented future refinement.
+   dropped from the index) is a documented future refinement. The acute case — a name merely not
+   yet posted during BaoStock's multi-hour publication window — never reaches this logic: it is
+   caught upstream by the evening schedule plus the publication-completeness guard (see Operations).
 
 3. **Membership must stay current.** `live.feed.extend_membership` pulls HS300 month-end
    snapshots after the last stored one and appends (never rebuilds), adding new entrants to the
    union while preserving the survivorship-free history. New union names are pulled by the next
    `update_daily_bars`.
 
-4. **Data-availability timing.** BaoStock publishes a day's EOD bar after close; run the driver
-   after ~15:30 CST on a trading day. A run before publication re-computes through the
-   last available bar (idempotent, harmless).
+4. **Data-availability timing.** BaoStock posts a day's EOD bars over ~2-3 h after close, so the
+   task runs in the evening (~19:00). A run *during* publication is rejected by the completeness
+   guard (`feed.assert_publication_complete`): if fewer than 90% of current members carry the latest
+   date's bar, `refresh` raises and no report is written (retry once complete), so a half-published
+   day can never mis-liquidate the not-yet-posted names.
 
 5. **Execution model is preserved.** The signal is read at the month-end close and executed at the next
    trading day's close, T+1, 100-share lots, full A-share frictions — identical to the backtest.
@@ -94,10 +98,11 @@ Outputs (gitignored) under `results/paper/`: `curve_<tier>.parquet`, `trades_<ti
 so a missed or repeated day is harmless.
 
 Scheduling — use the wrapper `scripts/paper_live.ps1` (captures stdout/stderr to a timestamped
-log and propagates the exit code; Task Scheduler discards output otherwise), weekdays after close:
+log and propagates the exit code; Task Scheduler discards output otherwise), weekdays in the evening
+(~19:00, after BaoStock posts the day's EOD bars):
 
 ```
-schtasks /Create /SC WEEKLY /D MON,TUE,WED,THU,FRI /ST 15:35 /TN hermes-paper ^
+schtasks /Create /SC WEEKLY /D MON,TUE,WED,THU,FRI /ST 19:00 /TN hermes-paper ^
   /TR "powershell -NoProfile -ExecutionPolicy Bypass -File F:\hermes-quant\scripts\paper_live.ps1"
 ```
 
@@ -112,11 +117,16 @@ schtasks /Create /SC WEEKLY /D MON,TUE,WED,THU,FRI /ST 15:35 /TN hermes-paper ^
   temp file then `os.replace()`, so a crash mid-write cannot wedge later runs with a truncated file.
 - **No spurious rebalance at the right edge**: the engine's `+1 < n` guard and the current-month
   membership exclusion mean a non-trading-day run never fires a rebalance (verified).
+- **Reject incomplete publication**: BaoStock posts EOD bars over ~2-3 h, so `feed.assert_publication_complete`
+  raises (no report written) if fewer than 90% of current members carry the latest date's bar — preventing a
+  mid-publication run from mis-liquidating the not-yet-posted names. The 19:00 schedule lands after
+  publication; this guard is the backstop.
 
 ## Deferred (not in this stage)
 
 Corporate-action cash accounting (see above); a marks-only incremental pull on non-rebalance days
-(the daily full re-pull is correct but heavier than needed); suspension-vs-delisting flag at the
-right edge (latent, zero current impact); price-limit no-fill in the engine (justified for liquid HS300;
+(the daily full re-pull is correct but heavier than needed); a membership-aware suspension-vs-delisting
+rule at the right edge for genuine multi-day suspensions (the acute same-day-publication case is now
+guarded — see Operations); price-limit no-fill in the engine (justified for liquid HS300;
 needed for a CSI 500 universe — see risk_control.md); the vnpy realtime gateway / `vnpy_paperaccount`
 path (`execution/`), reserved for higher-frequency or true-live execution.
