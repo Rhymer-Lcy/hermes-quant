@@ -41,6 +41,10 @@ A staged pipeline; a strategy advances only when the prior stage holds up:
    the same research engine forward (no train/serve skew); see docs/paper_trading.md.
    The tiers are configuration on one strategy object and make the small-account floor
    explicit: the book is infeasible below ~¥30k (100-share lots + ¥5 minimum commission).
+   The paper ledger is a FORWARD record — seeded at an inception date and tracked from there
+   (`PAPER_INCEPTION`), so its return is measured since inception, distinct from the 2015→
+   backtest (reproduce that with `python scripts/paper_live.py --backtest`; archived under
+   `results/backtests/`).
 3. **Live** (small real capital): deferred. The same strategy object, with the gateway swapped.
 
 See [docs/architecture.md](docs/architecture.md) for the full stack rationale.

@@ -31,12 +31,13 @@ re-spells the 5:1 value/reversal blend, so they cannot diverge. `test_paper.py` 
 
 ## Forward-only rigor (things the backtest never had to face)
 
-1. **Forward-adjusted re-basing is not append-only.** Forward-adjusted prices rescale the entire
-   history whenever a dividend/split occurs, so naively appending new days would mix two
-   adjustment bases in one series. `live.feed.update_daily_bars` therefore performs a full
-   re-pull (overwrite) of the union over `[BACKTEST_START, today]`, putting the whole lake on
-   one consistent basis; `replay` then recomputes the ledger wholesale from the seed, so the
-   equity curve is always self-consistent and re-running a date reproduces it. Forward-adjusted
+1. **Forward-adjusted re-basing is not blindly append-only.** Forward-adjusted prices rescale the
+   entire history whenever a dividend/split occurs, so naively appending new days would mix two
+   adjustment bases in one series. `live.feed.update_daily_bars` therefore refreshes INCREMENTALLY
+   (`ingest.pull_universe_incremental`): it appends each code's new bars but full-re-pulls any code
+   whose overlap bar's close changed on re-pull (the signal of a re-base), keeping the whole lake on
+   one consistent basis at a fraction of the cost; `replay` then recomputes the ledger wholesale from
+   the seed, so the equity curve is self-consistent and re-running a date reproduces it. Forward-adjusted
    prices reinvest dividends via the adjustment, so the paper curve approximates a total-return account.
    *Deferred refinement:* explicit corporate-action cash/tax accounting (dividend cash timing,
    dividend tax) — second-order for a monthly large-cap book, required before live.
@@ -135,8 +136,7 @@ schtasks /Create /SC WEEKLY /D MON,TUE,WED,THU,FRI /ST 19:00 /TN hermes-paper ^
 
 ## Deferred (not in this stage)
 
-Corporate-action cash accounting (see above); a marks-only incremental pull on non-rebalance days
-(the daily full re-pull is correct but heavier than needed); a membership-aware suspension-vs-delisting
+Corporate-action cash accounting (see above); a membership-aware suspension-vs-delisting
 rule at the right edge for genuine multi-day suspensions (the acute same-day-publication case is now
 guarded — see Operations); price-limit no-fill in the engine (justified for liquid HS300;
 needed for a CSI 500 universe — see risk_control.md); the vnpy realtime gateway / `vnpy_paperaccount`

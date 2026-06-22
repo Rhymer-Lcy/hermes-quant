@@ -71,7 +71,7 @@ def ledger_equity(state: LedgerState) -> pd.Series:
 
 def live_step(seed_cash: float, as_of: str | None = None, *, spec: DeployedStrategy = DEPLOYED,
               costs: AShareCosts | None = None, persist: bool = True,
-              inception: str | None = PAPER_INCEPTION) -> dict:
+              inception: str | None = PAPER_INCEPTION, out_dir=None) -> dict:
     """Run the DEPLOYED strategy as a PAPER account: seed `seed_cash` at the `inception` close,
     invest it fully into the current top-N there, and track forward to `as_of` (default: the latest
     bar on disk). Returns today's report. Idempotent (recompute-from-seed): re-running a date
@@ -81,7 +81,8 @@ def live_step(seed_cash: float, as_of: str | None = None, *, spec: DeployedStrat
     is seeded only from `inception` -- so `total_return` / `max_drawdown` are the FORWARD paper record
     since inception, NOT the 2015-> backtest. Pass `inception=None` for the full-history backtest
     curve (archived separately). Reads the lake refreshed by live.feed; uses the SAME deployed_signal
-    as research. Persists the equity curve, full trade log, and a JSON report under PAPER_DIR.
+    as research. Persists the equity curve, full trade log, and a JSON report under `out_dir`
+    (default PAPER_DIR; the backtest mode writes to results/backtests/).
     """
     mdf = pd.read_parquet(MEMBERSHIP_PARQUET)
     union = sorted(mdf["code"].unique())
@@ -132,9 +133,11 @@ def live_step(seed_cash: float, as_of: str | None = None, *, spec: DeployedStrat
     }
     if persist:
         ensure_dirs()
+        out = out_dir or PAPER_DIR
+        out.mkdir(parents=True, exist_ok=True)
         tag = f"{int(seed_cash)}"
-        atomic_to_parquet(ledger_equity(ledger).to_frame(), PAPER_DIR / f"curve_{tag}.parquet")
-        atomic_to_parquet(pd.DataFrame(res.trades), PAPER_DIR / f"trades_{tag}.parquet")
+        atomic_to_parquet(ledger_equity(ledger).to_frame(), out / f"curve_{tag}.parquet")
+        atomic_to_parquet(pd.DataFrame(res.trades), out / f"trades_{tag}.parquet")
         atomic_write_text(json.dumps(report, ensure_ascii=False, indent=2),
-                          PAPER_DIR / f"report_{tag}.json")
+                          out / f"report_{tag}.json")
     return report

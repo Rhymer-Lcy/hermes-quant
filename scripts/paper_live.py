@@ -21,7 +21,8 @@ import argparse
 
 from hermes.live.feed import refresh
 from hermes.live.paper import live_step
-from hermes.live.strategy import ALL_TIERS, DEPLOYED, TIER_LABEL
+from hermes.live.strategy import ALL_TIERS, DEPLOYED, PAPER_INCEPTION, TIER_LABEL
+from hermes.paths import BACKTESTS_DIR
 
 
 def main() -> None:
@@ -29,7 +30,13 @@ def main() -> None:
     ap.add_argument("--no-refresh", action="store_true", help="skip the BaoStock data pull")
     ap.add_argument("--as-of", default=None, help="recompute through this date (YYYY-MM-DD)")
     ap.add_argument("--tiers", type=int, nargs="*", default=ALL_TIERS, help="capital tiers (CNY)")
+    ap.add_argument("--backtest", action="store_true",
+                    help="full-history backtest (seed at 2015, inception=None) -> results/backtests/, "
+                         "NOT the forward paper record")
     args = ap.parse_args()
+
+    inception = None if args.backtest else PAPER_INCEPTION       # default forward paper; --backtest = full history
+    out_dir = (BACKTESTS_DIR / "deployed_full_history") if args.backtest else None
 
     if not args.no_refresh:
         print("refreshing lake from BaoStock (membership + forward-adjusted daily bars)...")
@@ -37,11 +44,13 @@ def main() -> None:
 
     print(f"\ndeployed = value + 1m-reversal {int(DEPLOYED.value_weight)}/"
           f"{int(DEPLOYED.reversal_weight)}, top{DEPLOYED.n_hold} monthly (PIT HS300, A-share frictions)")
+    print("mode:", "FULL-HISTORY BACKTEST (seed 2015)" if args.backtest
+          else f"PAPER forward record (seed at inception {PAPER_INCEPTION})")
     print(f"  {'band':>6} {'tier':>9} {'as_of':>12} {'equity':>14} {'totRet':>8} {'maxDD':>8} "
           f"{'avgN':>6} {'pos':>4} {'todayTrades':>12}")
     last_report = None
     for cap in args.tiers:
-        r = live_step(cap, as_of=args.as_of)
+        r = live_step(cap, as_of=args.as_of, inception=inception, out_dir=out_dir)
         last_report = r
         print(f"  {TIER_LABEL.get(cap, '?'):>6} {cap:>9,} {r['as_of']:>12} {r['equity']:>14,.0f} "
               f"{r['total_return']:>+8.1%} {r['max_drawdown']:>8.1%} {r['avg_names_held']:>6.2f} "
@@ -59,7 +68,8 @@ def main() -> None:
         print(f"\n*** STALE: last data bar {last_report['as_of']} is {last_report['lake_lag_days']}d "
               f"behind run date {last_report['run_date']} -- no fresh trading-day data (holiday/"
               f"weekend, source lag, or pull skipped). Record was re-computed, not updated. ***")
-    print("\nreports + curves + trade logs saved under results/paper/. Re-run safe (recompute-from-seed).")
+    print(f"\nsaved under results/{'backtests/deployed_full_history' if args.backtest else 'paper'}/. "
+          "Re-run safe (recompute-from-seed).")
     print(f"OK {last_report['run_date'] if last_report else ''} (as_of {last_report['as_of'] if last_report else '-'})")
 
 
