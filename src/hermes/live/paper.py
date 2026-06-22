@@ -1,12 +1,14 @@
 """EOD paper trading: run the DEPLOYED strategy forward on daily closes, recording every
-fill in an idempotent ledger (live.ledger). At capital tiers (¥5k–¥500k) to expose the
+fill in an idempotent ledger (live.ledger). At capital tiers (¥10k–¥5M) to expose the
 small-account friction the research engine flags via avg_names_held.
 
 Architecture (option A, monthly EOD): the research backtest engine IS the strategy brain.
-`replay()` runs `signal_portfolio_backtest(..., collect_trades=True)` over the data available
-so far and folds its per-fill trade log, day by day, into a LedgerState valued with the SAME
-`valuation_panel`. So paper P&L is reconstructed from the immutable seed by the exact research
-code -- no re-implementation, hence no train/serve drift (the dominant silent alpha-killer).
+`replay()` runs `signal_portfolio_backtest(..., collect_trades=True)` and folds its per-fill
+trade log, day by day, into a LedgerState valued with the SAME `valuation_panel`. So paper P&L is
+reconstructed from the seed by the exact research code -- no re-implementation, hence no
+train/serve drift (the dominant silent alpha-killer). The ledger is seeded at PAPER_INCEPTION
+(invested fully that day) and tracked forward, so `total_return` is the FORWARD paper record --
+NOT the 2015-> backtest (which `live_step(inception=None)` reproduces, archived separately).
 
 Going live forward is then one step (live_step): append today's real EOD bar to the close
 panel, recompute scores with the SAME factor code, re-run replay -- the ledger extends by the
@@ -27,21 +29,26 @@ from ..paths import PAPER_DIR, ensure_dirs
 from ..research.backtest.frictions import AShareCosts
 from ..research.backtest.portfolio import signal_portfolio_backtest, valuation_panel
 from .ledger import LedgerState, fold_day
-from .strategy import DEPLOYED, DeployedStrategy, deployed_signal
+from .strategy import DEPLOYED, PAPER_INCEPTION, DeployedStrategy, deployed_signal
 
 
 def replay(price: pd.DataFrame, signal: pd.DataFrame, seed_cash: float, *,
            n_hold: int = 10, costs: AShareCosts | None = None, members_asof=None,
-           weight_asof=None, rebalance_band: int = 0) -> tuple[LedgerState, object]:
+           weight_asof=None, rebalance_band: int = 0,
+           initial_rebalance: bool = False) -> tuple[LedgerState, object]:
     """Reconstruct the strategy's P&L as an idempotent ledger. Returns (ledger, result):
     `result` is the underlying PortfolioResult (for parity checks / stats); `ledger` is built
     by folding `result.trades` day by day from `seed_cash`, valued with `valuation_panel`.
+
+    `initial_rebalance` invests the seed on the FIRST bar (paper inception); default off keeps the
+    research backtest (and the parity tests) on the natural month-end schedule.
 
     The two equity series MUST agree (live.paper's only job is to record the engine's
     decisions, not re-decide) -- `scripts/paper_dryrun.py` asserts this as the anti-skew gate."""
     result = signal_portfolio_backtest(
         price, signal, seed_cash, n_hold=n_hold, costs=costs, members_asof=members_asof,
         weight_asof=weight_asof, rebalance_band=rebalance_band, collect_trades=True,
+        initial_rebalance=initial_rebalance,
     )
     valuation, _, _ = valuation_panel(price)
 
@@ -63,14 +70,18 @@ def ledger_equity(state: LedgerState) -> pd.Series:
 
 
 def live_step(seed_cash: float, as_of: str | None = None, *, spec: DeployedStrategy = DEPLOYED,
-              costs: AShareCosts | None = None, persist: bool = True) -> dict:
-    """Run the DEPLOYED strategy forward through `as_of` (default: latest bar on disk) on the
-    CURRENT data lake, and return today's report. Idempotent: the ledger is recomputed from
-    the immutable seed over all data each call (see replay) -- re-running a date reproduces it,
-    and forward-adjusted re-basing is absorbed because the whole curve is recomputed on one basis.
+              costs: AShareCosts | None = None, persist: bool = True,
+              inception: str | None = PAPER_INCEPTION) -> dict:
+    """Run the DEPLOYED strategy as a PAPER account: seed `seed_cash` at the `inception` close,
+    invest it fully into the current top-N there, and track forward to `as_of` (default: the latest
+    bar on disk). Returns today's report. Idempotent (recompute-from-seed): re-running a date
+    reproduces it, and forward-adjusted re-basing is absorbed (one consistent basis).
 
-    Reads the lake refreshed by live.feed; uses live.strategy.deployed_signal (the SAME spec
-    research uses). Persists the equity curve, full trade log, and a JSON report under PAPER_DIR.
+    The signal is computed over the FULL history (so factor lookbacks are satisfied), but the ledger
+    is seeded only from `inception` -- so `total_return` / `max_drawdown` are the FORWARD paper record
+    since inception, NOT the 2015-> backtest. Pass `inception=None` for the full-history backtest
+    curve (archived separately). Reads the lake refreshed by live.feed; uses the SAME deployed_signal
+    as research. Persists the equity curve, full trade log, and a JSON report under PAPER_DIR.
     """
     mdf = pd.read_parquet(MEMBERSHIP_PARQUET)
     union = sorted(mdf["code"].unique())
@@ -82,10 +93,17 @@ def live_step(seed_cash: float, as_of: str | None = None, *, spec: DeployedStrat
         cutoff = pd.Timestamp(as_of)
         close, pe = close.loc[close.index <= cutoff], pe.loc[pe.index <= cutoff]
 
-    signal = deployed_signal(close, pe, asof_fn, spec)
+    signal = deployed_signal(close, pe, asof_fn, spec)     # full-history signal (lookbacks satisfied)
+    initial = False
+    if inception is not None:
+        incept = pd.Timestamp(inception)
+        if (close.index >= incept).any():                  # seed the paper ledger AT inception,
+            close = close.loc[close.index >= incept]        # invest fully on that bar, track forward
+            signal = signal.loc[signal.index >= incept]
+            initial = True
     ledger, res = replay(close, signal, seed_cash, n_hold=spec.n_hold, costs=costs,
                          members_asof=asof_fn, weight_asof=spec.weight_asof,
-                         rebalance_band=spec.rebalance_band)
+                         rebalance_band=spec.rebalance_band, initial_rebalance=initial)
 
     today = close.index[-1]
     today_fills = [{**t, "date": t["date"].strftime("%Y-%m-%d")} for t in res.trades
@@ -102,6 +120,7 @@ def live_step(seed_cash: float, as_of: str | None = None, *, spec: DeployedStrat
         "lake_lag_days": lake_lag,                     # run_date - as_of (calendar days)
         "fresh": lake_lag <= 4,                        # False => likely a stale/holiday no-op
         "seed_cash": seed_cash,
+        "inception": close.index[0].strftime("%Y-%m-%d") if initial else None,  # forward record starts here
         "equity": float(res.equity.iloc[-1]),
         "total_return": float(res.total_return),
         "max_drawdown": float(res.max_drawdown),

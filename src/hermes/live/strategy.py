@@ -28,6 +28,12 @@ class DeployedStrategy:
 
 DEPLOYED = DeployedStrategy()
 
+# Paper-trading inception: the date the FORWARD paper record starts. The seed is invested at this
+# day's close into the current top-N, and total_return / max_drawdown are measured from here -- NOT
+# the 2015-> backtest (that curve is archived separately). 2026-06-18 is the last close before the
+# first unknown forward day (2026-06-22), so that day's move is the first paper return. See live.paper.
+PAPER_INCEPTION = "2026-06-18"
+
 # Paper-trading capital tiers (CNY), grouped small / medium / large. Chosen to be informative,
 # not round-number filler:
 #   small  [¥10k, ¥30k, ¥50k]  -- brackets the feasibility knee: ¥10k is INFEASIBLE (100-share lots

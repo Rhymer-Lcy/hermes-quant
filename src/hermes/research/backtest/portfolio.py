@@ -191,7 +191,7 @@ def _score_backtest(price: pd.DataFrame, scores: pd.DataFrame, capital: float,
                     n_hold: int, costs: AShareCosts | None, members_asof,
                     exposure_asof=None, weight_asof=None, rebalance_band: int = 0,
                     collect_trades: bool = False, limit_block: pd.DataFrame | None = None,
-                    rebalance_freq: str = "M") -> PortfolioResult:
+                    rebalance_freq: str = "M", initial_rebalance: bool = False) -> PortfolioResult:
     """Engine: each month hold the top-`n_hold` names by `scores` (read at the month-end
     signal date, executed next trading day), with A-share frictions. Weighting is equal
     by default; `weight_asof` supplies an alternative intra-basket weighting (e.g.
@@ -211,6 +211,8 @@ def _score_backtest(price: pd.DataFrame, scores: pd.DataFrame, capital: float,
     pos_of = {d: i for i, d in enumerate(dates)}
     period_end = pd.Series(dates, index=dates).groupby(periods).max().tolist()
     rebal_exec = {pos_of[sig] + 1: pos_of[sig] for sig in period_end if pos_of[sig] + 1 < n}
+    if initial_rebalance and n:                        # allocate on the first bar (paper inception):
+        rebal_exec.setdefault(0, 0)                    # read & execute that day's own signal at its close
 
     cash = float(capital)
     positions: dict[str, int] = {}
@@ -302,7 +304,7 @@ def signal_portfolio_backtest(price: pd.DataFrame, signal: pd.DataFrame, capital
                               members_asof=None, exposure_asof=None,
                               weight_asof=None, rebalance_band: int = 0,
                               collect_trades: bool = False, limit_block: pd.DataFrame | None = None,
-                              rebalance_freq: str = "M") -> PortfolioResult:
+                              rebalance_freq: str = "M", initial_rebalance: bool = False) -> PortfolioResult:
     """Top-N by an external `signal` panel (date x code), e.g. walk-forward ML
     out-of-sample predictions. `price` is the forward-adjusted close panel for exec/valuation.
     `exposure_asof`: optional callable(signal_date)->float in [0,1] scaling gross
@@ -313,7 +315,9 @@ def signal_portfolio_backtest(price: pd.DataFrame, signal: pd.DataFrame, capital
     `collect_trades`: also return the per-fill audit log (consumed by live.paper).
     `limit_block`: optional (date x code) price-limit flag panel (research.backtest.limits.limit_flags);
     blocks buys at the up-limit / sells at the down-limit on the exec day. OFF (None) by default
-    -- liquid HS300 doesn't need it; supply it for the CSI500/small-cap universe."""
+    -- liquid HS300 doesn't need it; supply it for the CSI500/small-cap universe.
+    `initial_rebalance`: also rebalance on the FIRST bar (signal read & executed that day) -- used by
+    paper trading to invest fully at its inception date instead of waiting for the first month-end."""
     return _score_backtest(price, signal, capital, n_hold, costs, members_asof,
                            exposure_asof, weight_asof, rebalance_band, collect_trades, limit_block,
-                           rebalance_freq)
+                           rebalance_freq, initial_rebalance)

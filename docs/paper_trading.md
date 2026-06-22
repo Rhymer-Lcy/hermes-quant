@@ -66,8 +66,12 @@ re-spells the 5:1 value/reversal blend, so they cannot diverge. `test_paper.py` 
 
 ## Capital tiers — the small-account constraint is material
 
-`avg_names_held` (effective diversification) vs the 10-name target, deployed strategy,
-2015-01 → 2026-06 (net of A-share frictions; `strategy.CAPITAL_TIERS`):
+The table below is the full-history BACKTEST characterization of each tier (`avg_names_held` =
+effective diversification vs the 10-name target, plus total return / maxDD over 2015-01 → 2026-06,
+net of A-share frictions; `strategy.CAPITAL_TIERS`). It is the rationale for the tier choice, NOT
+the live paper record (see "Live paper record" below). These `avg_names_held` reflect the GROWN
+capital over the backtest; a FRESH seed is tighter — a new ¥10k holds only ~7 of the 10 names at
+current prices, so its starting friction is worse than the 9.6 shown here:
 
 | band   | tier (¥)  | avg names | total return | maxDD  | note |
 |--------|----------:|----------:|-------------:|-------:|------|
@@ -84,6 +88,13 @@ minimum commission and 100-share lot rounding drag the CAGR ~3pp (≈7% vs ≈10
 cannot hold 10 names at all. The strategy saturates by ~¥100k (the large tiers add no new
 behaviour and assume negligible, unmodeled market impact). Tier-by-tier paper trading exists
 to establish this floor concretely before capital is committed.
+
+**Live paper record (forward).** The deployed ledger is seeded at `PAPER_INCEPTION` (`live.strategy`)
+— invested fully into the current top-N at that day's close — and tracked forward, so each report's
+`total_return` / `max_drawdown` measure performance SINCE inception (facing the unknown), not the
+backtest above. The signal still uses full history (so factor lookbacks are satisfied); only the
+ledger is seeded at inception. The full-history backtest curve is reproducible via
+`live_step(inception=None)` and is archived under `results/backtests/`.
 
 ## Operations
 

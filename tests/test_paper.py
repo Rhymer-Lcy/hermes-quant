@@ -84,3 +84,16 @@ def test_deployed_signal_is_the_documented_blend():
     want = fl.blend([ep, rev], [DEPLOYED.value_weight, DEPLOYED.reversal_weight])
     pd.testing.assert_frame_equal(got, want)
     assert (DEPLOYED.n_hold, DEPLOYED.rebalance_band, DEPLOYED.weight_asof) == (10, 0, None)
+
+
+def test_initial_rebalance_invests_on_the_first_bar():
+    # Paper inception: with initial_rebalance the seed is invested on day 0; the default (research)
+    # schedule stays idle until the first month-end. Same panel, the two must differ on the first bar.
+    dates = pd.bdate_range("2020-01-01", "2020-02-28")
+    price = pd.DataFrame({"a": np.linspace(10, 12, len(dates)),
+                          "b": np.linspace(20, 22, len(dates))}, index=dates)
+    signal = pd.DataFrame({"a": 2.0, "b": 1.0}, index=dates)
+    _, res_default = replay(price, signal, 1_000_000.0, n_hold=1)
+    _, res_incept = replay(price, signal, 1_000_000.0, n_hold=1, initial_rebalance=True)
+    assert not [t for t in res_default.trades if t["date"] == dates[0]]   # idle on day 0
+    assert [t for t in res_incept.trades if t["date"] == dates[0]]        # invested on day 0
