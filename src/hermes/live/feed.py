@@ -59,7 +59,15 @@ def extend_membership(end: str | None = None) -> tuple[pd.DataFrame, list[str], 
             rows.extend({"date": pd.Timestamp(d), "code": c} for c in snap["code"].tolist())
 
     new = pd.DataFrame(rows, columns=["date", "code"])
-    mdf = pd.concat([existing, new], ignore_index=True) if existing is not None else new
+    # Avoid concatenating an empty `new` (the common "already current" case): pandas warns on a
+    # concat involving empty/all-NA frames (its dtype handling is changing), and the result is
+    # simply `existing` anyway.
+    if existing is None:
+        mdf = new
+    elif new.empty:
+        mdf = existing
+    else:
+        mdf = pd.concat([existing, new], ignore_index=True)
     mdf = mdf.drop_duplicates(["date", "code"]).sort_values(["date", "code"]).reset_index(drop=True)
     atomic_to_parquet(mdf, MEMBERSHIP_PARQUET, index=False)
     union = sorted(mdf["code"].unique())
