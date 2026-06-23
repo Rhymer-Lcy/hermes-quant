@@ -33,8 +33,8 @@ fastjsonschema==2.21.2
 fonttools==4.63.0
 fqdn==1.5.1
 h11==0.16.0
-# Editable Git install with no remote (hermes-quant==0.0.1)
--e f:\hermes-quant
+# Editable install of this project (hermes-quant==0.0.1); path kept relative for portability
+-e .
 html5lib==1.1
 httpcore==1.0.9
 httpx==0.28.1
