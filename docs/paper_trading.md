@@ -123,9 +123,17 @@ schtasks /Create /SC WEEKLY /D MON,TUE,WED,THU,FRI /ST 19:00 /TN hermes-paper ^
 ```
 
 ### Unattended-operation guardrails (so the auto-record can be trusted)
-- **Fail loud on a degraded pull**: `feed.update_daily_bars` raises (nonzero exit, no report
-  written) if the BaoStock pull falls below 98% OK — a partial outage would otherwise leave a
-  mixed-forward-adjusted-basis lake; the next clean run re-pulls the whole union and self-heals.
+- **Retry transient failures with backoff**: a TRANSIENT data failure — BaoStock unreachable (e.g.
+  a VPN blackholing it at the scheduled time) or still mid-publication — exits 75 (`EX_TEMPFAIL`,
+  raised as `BaoStockUnavailable`); the wrapper then retries on a fixed interval, up to
+  `HERMES_RETRY_MAX` attempts spaced `HERMES_RETRY_DELAY_SEC` apart (default 24 × 300 s ≈ 2 h), so a
+  run blocked at 19:00 self-heals the moment connectivity returns without a manual re-trigger. A
+  FATAL error (any other nonzero exit) returns immediately. Each run is recompute-from-seed, so
+  retrying is safe.
+- **Fail loud on a degraded pull**: `feed.update_daily_bars` aborts (no report written) if the
+  BaoStock pull falls below 98% OK — a partial outage would otherwise leave a
+  mixed-forward-adjusted-basis lake. It raises `BaoStockUnavailable` (exit 75), so the wrapper
+  retries; once the source recovers, the next pull re-pulls the whole union and self-heals.
 - **Fresh-vs-stale signal**: each report carries `run_date`, `lake_lag_days`, and `fresh`; a
   holiday/weekend/source-lag run (which idempotently re-computes the prior bar) prints a `STALE`
   banner rather than presenting itself as a fresh trading-day update.
@@ -134,9 +142,10 @@ schtasks /Create /SC WEEKLY /D MON,TUE,WED,THU,FRI /ST 19:00 /TN hermes-paper ^
 - **No spurious rebalance at the right edge**: the engine's `+1 < n` guard and the current-month
   membership exclusion mean a non-trading-day run never fires a rebalance (verified).
 - **Reject incomplete publication**: BaoStock posts EOD bars over ~2-3 h, so `feed.assert_publication_complete`
-  raises (no report written) if fewer than 90% of current members carry the latest date's bar — preventing a
-  mid-publication run from mis-liquidating the not-yet-posted names. The 19:00 schedule lands after
-  publication; this guard is the backstop.
+  aborts (no report written) if fewer than 90% of current members carry the latest date's bar — preventing a
+  mid-publication run from mis-liquidating the not-yet-posted names. It too raises `BaoStockUnavailable`
+  (exit 75), so a run that lands mid-publication retries until publication completes. The 19:00 schedule
+  already targets the post-publication window; this guard is the backstop.
 
 ## Deferred (not in this stage)
 

@@ -16,6 +16,10 @@ scripts/paper_live.ps1 so stdout/stderr are captured to a timestamped log and th
   schtasks /Create /SC WEEKLY /D MON,TUE,WED,THU,FRI /ST 19:00 /TN hermes-paper ^
     /TR "powershell -NoProfile -ExecutionPolicy Bypass -File F:\\hermes-quant\\scripts\\paper_live.ps1"
 It is safe to re-run: each run recomputes from the seed; a holiday/stale run is flagged (fresh=false).
+
+Exit codes: 0 = success; 75 (EX_TEMPFAIL) = TRANSIENT data failure (BaoStock unreachable or
+mid-publication -- BaoStockUnavailable), which paper_live.ps1 retries with backoff; any other
+nonzero = FATAL (fail loud, no retry).
 """
 import argparse
 
@@ -75,8 +79,14 @@ def main() -> None:
 
 if __name__ == "__main__":
     import sys
+
+    from hermes.data.sources.baostock_source import BaoStockUnavailable
+
     try:
         main()
-    except Exception as exc:                       # unattended run: fail loud + nonzero exit
+    except BaoStockUnavailable as exc:             # transient (source unreachable / mid-publication):
+        print(f"\nRETRYABLE: paper_live transient data failure: {exc}", file=sys.stderr)
+        sys.exit(75)                               # EX_TEMPFAIL -> the wrapper retries with backoff
+    except Exception as exc:                       # fatal: fail loud + nonzero exit, no retry
         print(f"\nERROR: paper_live failed: {exc}", file=sys.stderr)
         sys.exit(1)

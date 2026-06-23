@@ -3,6 +3,7 @@ import pandas as pd
 
 from hermes.data.ingest import PRICE_LIMIT_PCT, _is_rebased, board_of
 from hermes.data.membership import membership_lookup
+from hermes.data.sources.baostock_source import _is_network_error
 from hermes.data.sources.tushare_source import to_ts_code
 
 
@@ -45,3 +46,15 @@ def test_is_rebased_detects_dividend_only():
     assert _is_rebased(10.0, 9.70) is True            # ex-dividend rescaled the whole history
     assert _is_rebased(10.0, 10.0) is False           # unchanged -> safe to append the new bars
     assert _is_rebased(10.0, 10.0 + 1e-9) is False    # float noise, not a re-base
+
+
+def test_is_network_error_classifies_transient_failures():
+    # transient transport failures -> retryable (driver exits EX_TEMPFAIL; wrapper retries):
+    assert _is_network_error("10002001", "网络错误") is True       # family floor (BSERR_SOCKET_ERR)
+    assert _is_network_error("10002007", "网络接收错误") is True   # the observed VPN-time failure
+    assert _is_network_error("10002008", "") is True              # family ceiling, empty message
+    assert _is_network_error("10009999", "网络连接错误") is True   # unlisted code, caught by message
+    # non-network failures -> fatal (no retry):
+    assert _is_network_error("0", "success") is False             # not an error at all
+    assert _is_network_error("10001002", "用户名或密码错误") is False  # auth error, not transport
+    assert _is_network_error("10004001", None) is False           # parse error, missing message

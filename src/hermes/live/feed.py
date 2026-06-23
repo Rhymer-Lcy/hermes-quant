@@ -26,6 +26,7 @@ from ..data.lake import load_close_panel
 from ..data.membership import (MEMBERSHIP_PARQUET, UNION_CSV,
                                month_end_trading_dates, rs_to_df)
 from ..data.sources import baostock_source as bss
+from ..data.sources.baostock_source import BaoStockUnavailable
 from ..io import atomic_to_parquet
 from ..paths import RAW_DIR, ensure_dirs
 
@@ -79,12 +80,13 @@ def extend_membership(end: str | None = None) -> tuple[pd.DataFrame, list[str], 
 
 
 def assert_pull_healthy(summary: pd.DataFrame, n_union: int, min_ok_fraction: float = 0.98) -> float:
-    """Return the OK fraction of a pull summary; RAISE if it falls below `min_ok_fraction`
-    (a degraded pull would leave a mixed-basis lake -- see update_daily_bars)."""
+    """Return the OK fraction of a pull summary; raise BaoStockUnavailable (transient, retryable)
+    if it falls below `min_ok_fraction` (a degraded pull would leave a mixed-basis lake -- see
+    update_daily_bars)."""
     ok = int((summary["status"] == "ok").sum()) if len(summary) else 0
     frac = ok / n_union if n_union else 0.0
     if frac < min_ok_fraction:
-        raise RuntimeError(
+        raise BaoStockUnavailable(                     # transient (connectivity): retryable with backoff
             f"degraded BaoStock pull: {ok}/{n_union} ok ({frac:.1%} < {min_ok_fraction:.0%}); "
             "refusing to update the live record on a partial/mixed-basis lake (re-run when the "
             "source recovers -- the next full pull self-heals)")
@@ -126,12 +128,13 @@ def assert_publication_complete(members: list[str], min_coverage: float = 0.90) 
     after the close, so a run inside that window finds today's bar for only some names while the
     rest still end on the prior day; the backtest's right-edge rule would then mistake the
     not-yet-posted names for delistings and force-liquidate them. If fewer than `min_coverage` of
-    the CURRENT index members carry a bar on the lake's latest date, RAISE -- refusing to compute
-    on a half-published day (the next run, once publication completes, self-heals). The fixed-time
-    schedule already targets the post-publication window; this is the fail-loud backstop."""
+    the CURRENT index members carry a bar on the lake's latest date, raise BaoStockUnavailable
+    (transient, retryable) -- refusing to compute on a half-published day (the next run, once
+    publication completes, self-heals). The fixed-time schedule already targets the
+    post-publication window; this is the fail-loud backstop."""
     latest, cov = latest_coverage(load_close_panel(codes=members, field="close"), members)
     if cov < min_coverage:
-        raise RuntimeError(
+        raise BaoStockUnavailable(                     # transient (mid-publication): retryable with backoff
             f"incomplete publication: only {cov:.0%} of current members carry a {latest.date()} "
             f"bar (< {min_coverage:.0%}); BaoStock is still posting today's EOD data. Refusing to "
             "update (would mis-liquidate the unposted names); retry when publication completes.")

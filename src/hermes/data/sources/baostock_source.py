@@ -28,12 +28,39 @@ _NUMERIC = [
 ]
 
 
+class BaoStockUnavailable(RuntimeError):
+    """BaoStock cannot currently supply a complete, current dataset -- either it is unreachable
+    (network/transport failure) or it has not finished posting the latest day's data. This is
+    TRANSIENT: a later retry, once connectivity is restored or publication completes, succeeds.
+    The unattended driver maps it to a distinct exit code so the wrapper retries with backoff
+    instead of failing the day (unlike a malformed-query error or an integrity-gate failure)."""
+
+
+# BaoStock reports transport problems via the 10002001-10002008 "network error/connect/send/recv"
+# code family (all phrased with '网络' = network) -- transient, unlike a malformed-query or auth
+# error. Classify them so the driver can retry rather than abort. The message substring is a
+# backstop in case the vendor adds an unlisted network code.
+_NETWORK_ERROR_CODES = frozenset(f"1000200{n}" for n in range(1, 9))
+
+
+def _is_network_error(error_code: str, error_msg: str) -> bool:
+    """True if a BaoStock error is a transient transport failure (retryable). Matches the known
+    10002001-10002008 network-error family or a '网络' (network) phrasing in the message, so an
+    unlisted network code is still caught by the message. Pure -- unit-tested without a session."""
+    return error_code in _NETWORK_ERROR_CODES or "网络" in (error_msg or "")
+
+
 @contextmanager
 def session():
-    """Anonymous BaoStock session. No account/credentials needed."""
+    """Anonymous BaoStock session. No account/credentials needed. A login failure caused by a
+    transport problem raises BaoStockUnavailable (retryable); any other login failure raises a
+    plain RuntimeError (fatal)."""
     lg = bs.login()
     if lg.error_code != "0":
-        raise RuntimeError(f"BaoStock login failed: {lg.error_code} {lg.error_msg}")
+        msg = f"BaoStock login failed: {lg.error_code} {lg.error_msg}"
+        if _is_network_error(lg.error_code, lg.error_msg):
+            raise BaoStockUnavailable(msg)
+        raise RuntimeError(msg)
     try:
         yield
     finally:
