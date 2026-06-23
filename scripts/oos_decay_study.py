@@ -46,8 +46,7 @@ WHAT IS MEASURED (four lenses; net AND gross where it matters)
    Calmar, Sharpe per period (net at CNY 1,000,000 = the fully-diversified working regime, plus
    the zero-cost gross curve). This is the plutus _slice_stats analog and the practical verdict.
 
-Reproduce:  D:\\Anaconda3\\envs\\hermes\\python.exe scripts/oos_decay_study.py
-(Use the interpreter path directly; `conda run -n hermes` crashes the conda plugin on this box.)
+Reproduce (with the hermes env active):  python scripts/oos_decay_study.py
 """
 from __future__ import annotations
 

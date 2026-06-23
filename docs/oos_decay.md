@@ -11,7 +11,7 @@ not any single year. This applies the identical discipline to hermes, on its own
 single-source deployed signal (`live.strategy.deployed_signal` — zero train/serve drift), and its
 own A-share frictions.
 
-Reproduce: `D:\Anaconda3\envs\hermes\python.exe scripts/oos_decay_study.py`.
+Reproduce (with the hermes env active): `python scripts/oos_decay_study.py`.
 
 ## The hypothesis being tested (and why it might be true)
 

@@ -119,7 +119,7 @@ log and propagates the exit code; Task Scheduler discards output otherwise), wee
 
 ```
 schtasks /Create /SC WEEKLY /D MON,TUE,WED,THU,FRI /ST 19:00 /TN hermes-paper ^
-  /TR "powershell -NoProfile -ExecutionPolicy Bypass -File F:\hermes-quant\scripts\paper_live.ps1"
+  /TR "powershell -NoProfile -ExecutionPolicy Bypass -File <repo>\scripts\paper_live.ps1"
 ```
 
 ### Unattended-operation guardrails (so the auto-record can be trusted)

@@ -34,10 +34,10 @@ the two use different price vendors.
 ## Reproduce
 
 ```
-# hand-rolled (hermes env):
-D:\Anaconda3\envs\hermes\python.exe scripts/survivorship_study.py
-# RQAlpha (separate rqalpha env; needs `rqalpha download-bundle` once):
-D:\Anaconda3\envs\rqalpha\python.exe scripts/rqalpha_crosscheck.py
+# hand-rolled (with the hermes env active):
+python scripts/survivorship_study.py
+# RQAlpha (with the separate rqalpha env active; needs `rqalpha download-bundle` once):
+python scripts/rqalpha_crosscheck.py
 ```
 
 The `rqalpha` env is separate (RQAlpha's dependency set, kept out of `hermes`); it is

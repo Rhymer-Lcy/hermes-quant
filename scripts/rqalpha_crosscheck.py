@@ -8,10 +8,11 @@ stamp tax, 100-share lots, and per-trade minimum commission -- so this is an IND
 engine + price-data + corporate-action validation of the hand-rolled PIT backtest
 (which produced ~ -7%/yr, survivorship-free), holding the membership definition fixed.
 
-Run with the rqalpha env:
-    D:\\Anaconda3\\envs\\rqalpha\\python.exe scripts/rqalpha_crosscheck.py
+Run with the rqalpha env active:
+    python scripts/rqalpha_crosscheck.py
 """
 import bisect
+from pathlib import Path
 
 import pandas as pd
 from rqalpha import run_func
@@ -22,7 +23,10 @@ from rqalpha import run_func
 
 N_HOLD = 10
 LOOKBACK = 20
-MEMBERSHIP_PATH = r"f:\hermes-quant\data\parquet\hs300_membership.parquet"
+# This script runs in the separate `rqalpha` env, where the `hermes` package is not installed,
+# so the lake path is derived from this file's location (scripts/ -> repo root) rather than
+# imported from hermes.paths.
+MEMBERSHIP_PATH = Path(__file__).resolve().parent.parent / "data" / "parquet" / "hs300_membership.parquet"
 
 
 def _to_rq(bao_code: str) -> str:

@@ -14,7 +14,7 @@ Scheduling (Windows Task Scheduler), weekdays in the EVENING (~19:00 CST; BaoSto
 scripts/paper_live.ps1 so stdout/stderr are captured to a timestamped log and the exit code
 (nonzero on a degraded pull or crash) is visible as the task's last result:
   schtasks /Create /SC WEEKLY /D MON,TUE,WED,THU,FRI /ST 19:00 /TN hermes-paper ^
-    /TR "powershell -NoProfile -ExecutionPolicy Bypass -File F:\\hermes-quant\\scripts\\paper_live.ps1"
+    /TR "powershell -NoProfile -ExecutionPolicy Bypass -File <repo>\\scripts\\paper_live.ps1"
 It is safe to re-run: each run recomputes from the seed; a holiday/stale run is flagged (fresh=false).
 
 Exit codes: 0 = success; 75 (EX_TEMPFAIL) = TRANSIENT data failure (BaoStock unreachable or

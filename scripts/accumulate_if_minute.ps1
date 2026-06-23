@@ -2,7 +2,7 @@
 # Tiny + isolated from the paper job (its failure must never touch the paper record). Logs to a
 # timestamped file and propagates the exit code. Register weekdays after futures close (~15:40):
 #   schtasks /Create /SC WEEKLY /D MON,TUE,WED,THU,FRI /ST 15:40 /TN hermes-if-accum `
-#     /TR "powershell -NoProfile -ExecutionPolicy Bypass -File F:\hermes-quant\scripts\accumulate_if_minute.ps1"
+#     /TR "powershell -NoProfile -ExecutionPolicy Bypass -File <repo>\scripts\accumulate_if_minute.ps1"
 # Portable: repo root derived from this script's location; python overridable via HERMES_PYTHON env var.
 $ErrorActionPreference = "Stop"
 $repo = Split-Path -Parent $PSScriptRoot
