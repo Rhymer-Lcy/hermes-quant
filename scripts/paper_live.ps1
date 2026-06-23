@@ -7,13 +7,13 @@
 # Portable: repo root is derived from this script's location (scripts/ -> repo); the python
 # interpreter is overridable via the HERMES_PYTHON env var (falls back to the conda env path).
 #
-# RETRY-WITH-BACKOFF: paper_live.py exits 75 (EX_TEMPFAIL) for a TRANSIENT data failure -- BaoStock
-# unreachable (e.g. a VPN blackholing it at the scheduled time) or still mid-publication -- and 1 for
-# a fatal error. On exit 75 this wrapper waits and retries, up to HERMES_RETRY_MAX attempts spaced
-# HERMES_RETRY_DELAY_SEC apart (default 24 x 300 s ~= 2 h), so a run blocked at 19:00 self-heals the
-# moment connectivity returns (or the VPN is briefly bypassed) WITHOUT a manual re-trigger. A fatal
-# error (any nonzero != 75) or success (0) returns immediately. Each python run is idempotent
-# (recompute-from-seed), so retrying is safe.
+# RETRY-WITH-BACKOFF: paper_live.py exits 75 (EX_TEMPFAIL) for a residual TRANSIENT data failure -- a
+# server-side blip during the publication window, a momentary network drop, or a mid-publication run
+# -- and 1 for a fatal error. (The common VPN-breaks-DNS failure is handled earlier by resolving and
+# pinning the server IP; see below.) On exit 75 this wrapper waits and retries, up to HERMES_RETRY_MAX
+# attempts spaced HERMES_RETRY_DELAY_SEC apart (default 24 x 300 s ~= 2 h), self-healing without a
+# manual re-trigger. A fatal error (any nonzero != 75) or success (0) returns immediately. Each python
+# run is idempotent (recompute-from-seed), so retrying is safe.
 $ErrorActionPreference = "Stop"
 $repo = Split-Path -Parent $PSScriptRoot
 $py = if ($env:HERMES_PYTHON) { $env:HERMES_PYTHON } else { "D:\Anaconda3\envs\hermes\python.exe" }
@@ -30,6 +30,23 @@ $EX_TEMPFAIL = 75
 # re-encoding and no stderr-as-error wrapping); both are then appended as UTF-8, in order.
 $env:PYTHONIOENCODING = "utf-8"
 $script = Join-Path $repo 'scripts\paper_live.py'
+
+# Pin BaoStock's server IP so the pull works even when a corporate VPN (e.g. Sangfor SSL) breaks DNS
+# for public-api.baostock.com while leaving the server's physical route intact. Resolve via a PUBLIC
+# DNS server (the VPN does not block UDP/53 to these) and pass the IP to Python via HERMES_BAOSTOCK_IP.
+# Best-effort: if every public resolver is unreachable, Python falls back to its cached/seed IP. A
+# manual `python paper_live.py` resolves the same way inside session().
+foreach ($dns in '223.5.5.5', '119.29.29.29', '8.8.8.8') {
+  try {
+    $a = Resolve-DnsName -Server $dns -Name public-api.baostock.com -Type A -DnsOnly -ErrorAction Stop |
+      Where-Object { $_.Type -eq 'A' } | Select-Object -First 1
+    if ($a -and $a.IPAddress) {
+      $env:HERMES_BAOSTOCK_IP = $a.IPAddress
+      "resolved public-api.baostock.com -> $($a.IPAddress) via DNS $dns" | Out-File -FilePath $log -Append -Encoding utf8
+      break
+    }
+  } catch { }
+}
 
 for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
   "=== run $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') (attempt $attempt/$maxAttempts) ===" |

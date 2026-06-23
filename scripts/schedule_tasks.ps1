@@ -7,8 +7,9 @@
 # not-yet-posted names. hermes-if-accum stays at 15:40 (Sina minute bars are available at close).
 # Both use StartWhenAvailable: a run missed because the PC was off/asleep/logged-out fires on the
 # next boot/wake (cannot run while powered off; one catch-up, which suffices given recompute-from-seed).
-# hermes-paper additionally retries a TRANSIENT data failure with backoff inside paper_live.ps1 (BaoStock
-# unreachable, e.g. a VPN blocking it at 19:00, or mid-publication) -- so it self-heals without a manual
+# hermes-paper works with the corporate VPN on: paper_live.ps1 resolves public-api.baostock.com via a
+# public DNS server and pins the IP (the VPN breaks the default resolver but not the route), and it
+# additionally retries any residual TRANSIENT failure with backoff -- so it self-heals without a manual
 # re-trigger; a run can therefore stay in the Running state for up to the retry window (~2 h by default).
 #
 # Usage (run from anywhere; paths are derived from this script's location):

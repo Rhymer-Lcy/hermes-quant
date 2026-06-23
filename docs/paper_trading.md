@@ -123,13 +123,22 @@ schtasks /Create /SC WEEKLY /D MON,TUE,WED,THU,FRI /ST 19:00 /TN hermes-paper ^
 ```
 
 ### Unattended-operation guardrails (so the auto-record can be trusted)
-- **Retry transient failures with backoff**: a TRANSIENT data failure — BaoStock unreachable (e.g.
-  a VPN blackholing it at the scheduled time) or still mid-publication — exits 75 (`EX_TEMPFAIL`,
-  raised as `BaoStockUnavailable`); the wrapper then retries on a fixed interval, up to
-  `HERMES_RETRY_MAX` attempts spaced `HERMES_RETRY_DELAY_SEC` apart (default 24 × 300 s ≈ 2 h), so a
-  run blocked at 19:00 self-heals the moment connectivity returns without a manual re-trigger. A
-  FATAL error (any other nonzero exit) returns immediately. Each run is recompute-from-seed, so
-  retrying is safe.
+- **VPN-resistant connection (resolve + pin the server IP)**: the BaoStock client connects to the
+  hostname `public-api.baostock.com:10030`. A split-tunnel corporate VPN (observed: Sangfor SSL VPN)
+  can break the default DNS resolver for that host — `getaddrinfo` returns `gaierror` — while leaving
+  the server's physical route intact and reachable. Login then fails with a `10002xxx` network error.
+  The fix needs no admin rights and no VPN reconfiguration: the wrapper resolves the host via a PUBLIC
+  DNS server (`Resolve-DnsName -Server 223.5.5.5`, then `119.29.29.29`, `8.8.8.8` — the VPN does not
+  block UDP/53 to these) and exports the IP as `HERMES_BAOSTOCK_IP`; `baostock_source.session()` pins
+  the client's socket to that IP, skipping DNS entirely. Standalone (`python scripts/paper_live.py`)
+  the same `session()` resolves via the OS (caching the result under `data/cache/`) and falls back to
+  the last cached IP, then a seed. The scheduled run therefore succeeds with the VPN on.
+- **Retry transient failures with backoff**: a residual TRANSIENT data failure — a server-side blip
+  during the heavy publication window, a momentary network drop, or a mid-publication run — exits 75
+  (`EX_TEMPFAIL`, raised as `BaoStockUnavailable`); the wrapper then retries on a fixed interval, up
+  to `HERMES_RETRY_MAX` attempts spaced `HERMES_RETRY_DELAY_SEC` apart (default 24 × 300 s ≈ 2 h),
+  self-healing without a manual re-trigger. A FATAL error (any other nonzero exit) returns
+  immediately. Each run is recompute-from-seed, so retrying is safe.
 - **Fail loud on a degraded pull**: `feed.update_daily_bars` aborts (no report written) if the
   BaoStock pull falls below 98% OK — a partial outage would otherwise leave a
   mixed-forward-adjusted-basis lake. It raises `BaoStockUnavailable` (exit 75), so the wrapper

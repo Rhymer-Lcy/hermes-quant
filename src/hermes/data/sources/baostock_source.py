@@ -11,10 +11,27 @@ adjustflag: "1" = backward-adjusted, "2" = forward-adjusted, "3" = unadjusted.
 """
 from __future__ import annotations
 
+import os
+import socket
 from contextlib import contextmanager
 
 import baostock as bs
 import pandas as pd
+
+# BaoStock's client connects by HOSTNAME (despite the name, cons.BAOSTOCK_SERVER_IP is
+# "public-api.baostock.com"); see _resolve_server_ip for why we pin it to an IP. Reaching into the
+# vendor's internal constants is guarded: if a future layout change hides them, fall back to the
+# known host/port and skip pinning (login then uses BaoStock's own DNS path, as before).
+try:
+    import baostock.common.contants as _bs_cons
+
+    _SERVER_HOST = _bs_cons.BAOSTOCK_SERVER_IP            # "public-api.baostock.com"
+    _SERVER_PORT = _bs_cons.BAOSTOCK_SERVER_PORT          # 10030
+except Exception:                                        # pragma: no cover - vendor internals moved
+    _bs_cons = None
+    _SERVER_HOST, _SERVER_PORT = "public-api.baostock.com", 10030
+
+_FALLBACK_SERVER_IP = "114.94.20.73"                     # public-api.baostock.com (seed; cache refreshes it)
 
 # Full daily field set BaoStock exposes for stocks.
 _DAILY_FIELDS = (
@@ -50,11 +67,66 @@ def _is_network_error(error_code: str, error_msg: str) -> bool:
     return error_code in _NETWORK_ERROR_CODES or "网络" in (error_msg or "")
 
 
+def _server_ip_cache_path():
+    from ...paths import CACHE_DIR
+    return CACHE_DIR / "baostock_server_ip.txt"
+
+
+def _read_cached_server_ip() -> str | None:
+    try:
+        p = _server_ip_cache_path()
+        return (p.read_text(encoding="utf-8").strip() or None) if p.exists() else None
+    except OSError:
+        return None
+
+
+def _cache_server_ip(ip: str) -> None:
+    try:
+        from ...io import atomic_write_text
+        from ...paths import CACHE_DIR
+        CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        atomic_write_text(ip, _server_ip_cache_path())
+    except OSError:
+        pass                                             # a stale/absent cache just falls back below
+
+
+def _resolve_server_ip(host: str = _SERVER_HOST) -> str:
+    """Resolve BaoStock's server hostname to an IPv4 address, robust to a VPN that breaks the
+    DEFAULT resolver while leaving the server's physical route intact (observed with Sangfor SSL
+    VPN: getaddrinfo on public-api.baostock.com fails, yet the IP is directly reachable). Order:
+    HERMES_BAOSTOCK_IP override (the wrapper resolves via a public DNS server and sets it) -> OS
+    resolution, cached on success -> last cached IP -> seed. The result is handed to the socket
+    directly, so login no longer needs DNS."""
+    override = os.environ.get("HERMES_BAOSTOCK_IP", "").strip()
+    if override:
+        _cache_server_ip(override)                       # keep the cache fresh for manual runs too
+        return override
+    try:
+        ip = socket.getaddrinfo(host, _SERVER_PORT, family=socket.AF_INET,
+                                type=socket.SOCK_STREAM)[0][4][0]
+        _cache_server_ip(ip)
+        return ip
+    except OSError:                                      # VPN-broken DNS, offline, etc.
+        return _read_cached_server_ip() or _FALLBACK_SERVER_IP
+
+
+def _pin_server_ip() -> str | None:
+    """Point the BaoStock client's socket at a resolved IP (idempotent). No-op if the vendor's
+    constants module could not be imported. Returns the IP pinned (or None)."""
+    if _bs_cons is None:
+        return None
+    ip = _resolve_server_ip()
+    _bs_cons.BAOSTOCK_SERVER_IP = ip
+    return ip
+
+
 @contextmanager
 def session():
-    """Anonymous BaoStock session. No account/credentials needed. A login failure caused by a
-    transport problem raises BaoStockUnavailable (retryable); any other login failure raises a
-    plain RuntimeError (fatal)."""
+    """Anonymous BaoStock session. No account/credentials needed. The server hostname is resolved
+    and pinned to an IP first (see _pin_server_ip), so login works even behind a VPN that breaks
+    DNS. A login failure from a transport problem raises BaoStockUnavailable (retryable); any other
+    login failure raises a plain RuntimeError (fatal)."""
+    _pin_server_ip()
     lg = bs.login()
     if lg.error_code != "0":
         msg = f"BaoStock login failed: {lg.error_code} {lg.error_msg}"

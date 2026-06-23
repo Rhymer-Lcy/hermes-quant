@@ -58,3 +58,27 @@ def test_is_network_error_classifies_transient_failures():
     assert _is_network_error("0", "success") is False             # not an error at all
     assert _is_network_error("10001002", "用户名或密码错误") is False  # auth error, not transport
     assert _is_network_error("10004001", None) is False           # parse error, missing message
+
+
+def test_resolve_server_ip_fallback_chain(monkeypatch):
+    # The server hostname is resolved + pinned so login survives a VPN that breaks DNS. Order:
+    # env override -> OS resolution -> last cached IP -> seed.
+    import socket as _socket
+
+    from hermes.data.sources import baostock_source as bss
+
+    monkeypatch.setattr(bss, "_cache_server_ip", lambda ip: None)   # never touch disk in the test
+
+    # 1) explicit override (the wrapper resolves via public DNS and sets it) wins
+    monkeypatch.setenv("HERMES_BAOSTOCK_IP", "1.2.3.4")
+    assert bss._resolve_server_ip() == "1.2.3.4"
+
+    # 2) no override + DNS broken (VPN) -> last cached IP
+    monkeypatch.delenv("HERMES_BAOSTOCK_IP", raising=False)
+    monkeypatch.setattr(_socket, "getaddrinfo", lambda *a, **k: (_ for _ in ()).throw(OSError()))
+    monkeypatch.setattr(bss, "_read_cached_server_ip", lambda: "5.6.7.8")
+    assert bss._resolve_server_ip() == "5.6.7.8"
+
+    # 3) no override + DNS broken + no cache -> seed
+    monkeypatch.setattr(bss, "_read_cached_server_ip", lambda: None)
+    assert bss._resolve_server_ip() == bss._FALLBACK_SERVER_IP
