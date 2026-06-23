@@ -12,6 +12,12 @@
 # additionally retries any residual TRANSIENT failure with backoff -- so it self-heals without a manual
 # re-trigger; a run can therefore stay in the Running state for up to the retry window (~2 h by default).
 #
+# Interpreter: a scheduled task runs with no activated conda env, so the wrappers must be told which
+# python runs the `hermes` package. `register` resolves that interpreter (preferring an explicit
+# HERMES_PYTHON, else the active conda env, else PATH), VERIFIES it can `import hermes`, and persists
+# it as the user-scope HERMES_PYTHON env var the wrappers read -- so no machine-specific interpreter
+# path is hardcoded in source. Run `register` from an activated hermes env, or set HERMES_PYTHON first.
+#
 # Usage (run from anywhere; paths are derived from this script's location):
 #   powershell -ExecutionPolicy Bypass -File scripts\schedule_tasks.ps1 register   # (re)create both (idempotent)
 #   powershell ... schedule_tasks.ps1 status     # show state + next run time
@@ -22,12 +28,37 @@
 # Per-task: replace the loop with a single -TaskName, e.g.  Disable-ScheduledTask -TaskName hermes-if-accum
 param([ValidateSet('register', 'status', 'disable', 'enable', 'remove')] [string]$action = 'status')
 $ErrorActionPreference = 'Stop'
+
+function Resolve-HermesPython {
+  # Locate the Python interpreter that runs the hermes package, and VERIFY it -- a wrong interpreter
+  # would register a task that fails every night. Order: explicit HERMES_PYTHON, then the active conda
+  # env, then PATH. Returns the verified absolute path; throws (fail-loud) if none can import hermes.
+  $candidates = @()
+  if ($env:HERMES_PYTHON) { $candidates += $env:HERMES_PYTHON }
+  if ($env:CONDA_PREFIX) { $candidates += (Join-Path $env:CONDA_PREFIX 'python.exe') }
+  $onPath = (Get-Command python -ErrorAction SilentlyContinue).Source
+  if ($onPath) { $candidates += $onPath }
+  $candidates = $candidates | Select-Object -Unique
+  foreach ($c in $candidates) {
+    if ($c -and (Test-Path $c)) {
+      & $c -c 'import hermes' 2>$null
+      if ($LASTEXITCODE -eq 0) { return (Resolve-Path $c).Path }
+    }
+  }
+  throw ("No Python interpreter that can 'import hermes' was found (tried: " + ($candidates -join ', ') +
+    "). Activate the hermes env (conda activate hermes) or set HERMES_PYTHON to its python.exe, then re-run register.")
+}
+
 $tasks = @{
   'hermes-paper'    = @{ file = Join-Path $PSScriptRoot 'paper_live.ps1';          time = '19:00'; desc = 'Hermes daily EOD paper trading (weekdays 19:00, after BaoStock posts EOD)' }
   'hermes-if-accum' = @{ file = Join-Path $PSScriptRoot 'accumulate_if_minute.ps1'; time = '15:40'; desc = 'Hermes daily IF minute-bar accumulator (weekdays 15:40)' }
 }
 switch ($action) {
   'register' {
+    $py = Resolve-HermesPython
+    [Environment]::SetEnvironmentVariable('HERMES_PYTHON', $py, 'User')
+    $env:HERMES_PYTHON = $py
+    "configured HERMES_PYTHON = $py (user scope; the wrappers read this -- no interpreter path is hardcoded)"
     foreach ($name in $tasks.Keys) {
       $t = $tasks[$name]
       $a = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$($t.file)`""
@@ -45,6 +76,8 @@ switch ($action) {
   'enable'  { $tasks.Keys | ForEach-Object { Enable-ScheduledTask -TaskName $_ | Out-Null; "enabled $_" } }
   'remove'  { $tasks.Keys | ForEach-Object { Unregister-ScheduledTask -TaskName $_ -Confirm:$false; "removed $_" } }
   'status'  {
+    $cfg = [Environment]::GetEnvironmentVariable('HERMES_PYTHON', 'User')
+    "HERMES_PYTHON (user) = $(if ($cfg) { $cfg } else { '(unset -- run register)' })"
     Get-ScheduledTask -TaskName 'hermes-*' | Select-Object TaskName, State | Format-Table -AutoSize
     Get-ScheduledTask -TaskName 'hermes-*' | ForEach-Object { "{0}: next run {1}" -f $_.TaskName, (Get-ScheduledTaskInfo -TaskName $_.TaskName).NextRunTime }
   }

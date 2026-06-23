@@ -5,7 +5,8 @@
 #   schtasks /Create /SC WEEKLY /D MON,TUE,WED,THU,FRI /ST 19:00 /TN hermes-paper `
 #     /TR "powershell -NoProfile -ExecutionPolicy Bypass -File <repo>\scripts\paper_live.ps1"
 # Portable: repo root is derived from this script's location (scripts/ -> repo); the python
-# interpreter is overridable via the HERMES_PYTHON env var (falls back to the conda env path).
+# interpreter comes from HERMES_PYTHON (set at user scope by `schedule_tasks.ps1 register`, which a
+# scheduled task inherits), else `python` on PATH for a manually-run, env-activated invocation.
 #
 # RETRY-WITH-BACKOFF: paper_live.py exits 75 (EX_TEMPFAIL) for a residual TRANSIENT data failure -- a
 # server-side blip during the publication window, a momentary network drop, or a mid-publication run
@@ -16,7 +17,7 @@
 # run is idempotent (recompute-from-seed), so retrying is safe.
 $ErrorActionPreference = "Stop"
 $repo = Split-Path -Parent $PSScriptRoot
-$py = if ($env:HERMES_PYTHON) { $env:HERMES_PYTHON } else { "D:\Anaconda3\envs\hermes\python.exe" }
+$py = if ($env:HERMES_PYTHON) { $env:HERMES_PYTHON } else { "python" }
 $logdir = Join-Path $repo "results\paper\logs"
 New-Item -ItemType Directory -Force -Path $logdir | Out-Null
 $log = Join-Path $logdir ("paper_{0:yyyyMMdd}.log" -f (Get-Date))
