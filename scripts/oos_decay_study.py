@@ -43,7 +43,7 @@ WHAT IS MEASURED (four lenses; net AND gross where it matters)
    is scarce), so this measures edge decay, not a deployable return.
 4. DEPLOYED LONG-ONLY, NET OF A-SHARE COST. The actual book (value+rev1 5/1, top-10, monthly)
    run once over the full sample, then its equity curve SLICED into the regimes -> CAGR, maxDD,
-   Calmar, Sharpe per period (net at AUD 1,000,000 = the fully-diversified working regime, plus
+   Calmar, Sharpe per period (net at CNY 1,000,000 = the fully-diversified working regime, plus
    the zero-cost gross curve). This is the plutus _slice_stats analog and the practical verdict.
 
 Reproduce:  D:\\Anaconda3\\envs\\hermes\\python.exe scripts/oos_decay_study.py
@@ -274,7 +274,7 @@ def main() -> None:
     res_net = signal_portfolio_backtest(close, composite, NET_TIER, N_HOLD, members_asof=asof)
     res_gross = signal_portfolio_backtest(close, composite, NET_TIER, N_HOLD, costs=ZERO_COSTS,
                                           members_asof=asof)
-    print(f"\n[4] DEPLOYED LONG-ONLY, sub-period slices (net @ AUD {NET_TIER:,}; gross = zero-cost)")
+    print(f"\n[4] DEPLOYED LONG-ONLY, sub-period slices (net @ CNY {NET_TIER:,}; gross = zero-cost)")
     print(f"    full-sample check: net CAGR {res_net.cagr:+.1%}  maxDD {res_net.max_drawdown:.1%}  "
           f"Calmar {res_net.cagr/abs(res_net.max_drawdown):.2f}  (matches docs/multi_factor.md ~0.32)")
     print(f"  {'window':<22} {'netCAGR':>8} {'maxDD':>8} {'netCal':>7} {'netShrp':>8} {'grossCal':>9}")

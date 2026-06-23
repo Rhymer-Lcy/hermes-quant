@@ -59,7 +59,8 @@ A skeptic audit (tasked to refute, not confirm) reproduced every number, confirm
 leak-free and survivorship-clean (the signal at t recomputes bit-identically on data truncated to
 ≤ t; `members_asof` is strictly point-in-time; `restrict_to_universe` precedes standardization so
 the union does not leak), and confirmed the inference is valid on non-overlapping, near-IID monthly
-observations (IC lag-1 autocorrelation ≈ 0.03–0.05). It corrected two overstatements:
+observations (IC lag-1 autocorrelation ≈ 0.02 full / 0.05 holdout — negligible). It corrected two
+overstatements:
 
 1. **The holdout's *standalone* significance is boundary-fragile.** It is not robustly significant;
    it rides on the window boundary and a few months:
@@ -70,15 +71,15 @@ observations (IC lag-1 autocorrelation ≈ 0.03–0.05). It corrected two overst
    | 2021-2025 | +2.25 (0.028) | +1.97 (0.053) |
    | 2022-2025 | +1.91 (0.063) | +1.73 (0.091) |
 
-   Dropping the two best IC months (the 2021 value-rebound spikes) takes the 2021-2025 composite to
-   t=1.81 (p=0.075). The defensible claim is therefore **"positive and not refuted — consistent
-   with the early period"**, not "robustly significant on its own."
+   Dropping the two largest IC months takes the 2021-2025 composite to t=1.81 (p=0.075). The
+   defensible claim is therefore **"positive and not refuted — consistent with the early period"**,
+   not "robustly significant on its own."
 
 2. **The −33% drawdown floor is not cured; the recent regime is not benign.** An earlier version
    measured each sub-period's drawdown from a window-local high-water mark, reporting 2022-2025 at
-   maxDD −15.6% / Calmar 1.01. That is a slicing artifact: the book *entered* 2022 already ~24%
-   underwater. Measured against the **carry-in** high-water mark (fixed), every regime carries the
-   intrinsic value-style floor:
+   maxDD −15.6% / Calmar 1.01. That is a slicing artifact: the book *entered* 2022 already ~23%
+   underwater (and bottomed at −30.1% within the window). Measured against the **carry-in**
+   high-water mark (fixed), every regime carries the intrinsic value-style floor:
 
    | window | net CAGR | carry-in maxDD | net Calmar | net Sharpe |
    |---|--:|--:|--:|--:|
