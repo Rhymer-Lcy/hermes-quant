@@ -210,22 +210,72 @@ scarce, and constrained, so it is not a costless option.
 
 ## A9 — per-name stop-loss / take-profit: REJECTED
 
-REPRODUCIBILITY GAP: unlike A1-A8, no `*_study.py` for this ablation was ever committed, so the
-figures below cannot currently be regenerated from this repo. They are recorded as reported; treat
-them as weaker evidence than the scripted studies until the script is restored.
+The deployed book rides its positions between monthly rebalances. Stops are the retail instinct after
+a drawdown, so they are measured, not assumed. Exits are checked EVERY bar, before any rebalance,
+against each holding's share-weighted cost basis (slippage included); a breach liquidates the whole
+position through the normal sell path and the proceeds sit in cash until the next rebalance. Both
+trigger modes are swept, with deliberately pessimistic fills (a gap-through stop fills BELOW its
+trigger; a take-profit never fills above its limit; if one bar touches both, the stop is assumed), so
+neither overlay can be flattered by the model. Baseline: net Calmar 0.318, maxDD −33.0%.
+Repro: `python scripts/stops_study.py` (engine: `research/backtest/stops.py`).
 
-The deployed book has no price stops; tested as an ablation (full daily-loop, no look-ahead, vs the
-no-stop baseline Calmar ~0.32 / maxDD −33%):
+| overlay | trigger | CAGR | maxDD | net Calmar | ΔnetCal | ΔgrossCal | stop exits |
+|---------|---------|-----:|------:|-----------:|--------:|----------:|-----------:|
+| *baseline (no stops)* | — | +10.5% | −33.0% | 0.318 | — | — | 0 |
+| stop-loss −10% | close | +8.7% | −29.4% | 0.298 | −0.020 | +0.006 | 105 |
+| stop-loss −15% | close | +8.5% | −32.8% | 0.260 | −0.058 | −0.054 | 55 |
+| stop-loss −20% | close | +9.6% | −31.3% | 0.306 | −0.012 | −0.002 | 28 |
+| stop-loss −25% | close | +9.7% | −32.0% | 0.305 | −0.013 | −0.012 | 16 |
+| stop-loss −10% | intraday | +7.5% | −32.7% | 0.229 | **−0.088** | −0.078 | 123 |
+| stop-loss −15% | intraday | +8.4% | −32.1% | 0.262 | −0.055 | −0.052 | 57 |
+| stop-loss −20% | intraday | +9.0% | −32.4% | 0.278 | −0.039 | −0.029 | 33 |
+| stop-loss −25% | intraday | +9.7% | −32.0% | 0.305 | −0.013 | −0.012 | 17 |
+| take-profit +15% | close | +9.8% | −30.9% | 0.319 | +0.001 | +0.002 | 94 |
+| take-profit +20% | close | +9.5% | −31.4% | 0.301 | −0.016 | −0.009 | 58 |
+| take-profit +30% | close | +10.3% | −30.9% | 0.334 | +0.017 | +0.019 | 27 |
+| take-profit +50% | close | +10.6% | −33.0% | 0.320 | +0.003 | +0.003 | 8 |
+| take-profit +15% | intraday | +9.6% | −28.4% | 0.339 | **+0.021** | +0.025 | 117 |
+| take-profit +20% | intraday | +9.5% | −31.4% | 0.304 | −0.014 | −0.007 | 71 |
+| take-profit +30% | intraday | +9.6% | −33.0% | 0.291 | −0.027 | −0.026 | 29 |
+| take-profit +50% | intraday | +10.6% | −33.0% | 0.322 | +0.004 | +0.004 | 10 |
 
-| overlay        | best setting | ΔCalmar | maxDD effect |
-|----------------|-------------|--------:|--------------|
-| stop-loss      | −10/−15/−20/−25% | −0.085 to −0.106 (all negative) | none cut it; −15%/−20% **deepen** it (−6pp, −4pp) |
-| take-profit    | +15/+20/+30/+50% | +0.04 fragile | non-monotone, sign-flips across sub-periods |
+**Stop-loss harms the book at every level and in both trigger modes** (ΔnetCalmar −0.012 to −0.088),
+and it harms the GROSS curve too (7 of 8 cells), so it is a genuine timing give-up rather than a cost
+artifact. The mechanism is structural: the deployed signal carries a 1-month **reversal** leg, which
+buys names that have just fallen; a stop-loss **sells** names that have just fallen. The two are
+opposed by construction, and a stop systematically liquidates precisely the oversold positions the
+reversal leg was paid to hold — the per-name analogue of A1's failed portfolio timing.
 
-**Stops harm the strategy** -- they dump the oversold names a value/reversal book is designed to retain (same
-class as A1 portfolio-timing). Take-profit's small bump is single-event (2015-08) regime luck that flips
-sign out-of-sample. **Keep the book as-is: no price stops, no take-profit.** (The catastrophe exits that
-do belong -- delisting force-liquidation, ST filter -- are already in the engine.)
+**Take-profit is noise.** Its best cell (+0.021) is the argmax of 16 configurations, the level sweep
+alternates sign (+0.001, −0.016, +0.017, +0.003 on close), so there is no plateau to stand on — the
+trap `multi_factor.md` warns about. Sliced by regime, the best cell's advantage flips sign:
+
+| window | baseline Calmar | take-profit +15% intraday | ΔCalmar |
+|--------|----------------:|--------------------------:|--------:|
+| 2015-2018 | 0.263 | 0.320 | +0.057 |
+| 2019-2021 | 0.200 | 0.147 | **−0.053** |
+| 2022-2025 | 0.527 | 0.646 | +0.119 |
+
+**Keep the book as-is: no price stops, no take-profit.** (The catastrophe exits that do belong --
+delisting force-liquidation, ST filter -- are already in the engine.)
+
+### Correction: what this re-run overturned
+
+An earlier version of A9 reported figures from a script that was never committed. Rebuilt and re-run,
+the **verdict is unchanged** (both overlays rejected) but two of its numbers do not survive:
+
+1. It claimed stop-loss ΔCalmar of **−0.085 to −0.106**. The true range is **−0.012 to −0.088**; the
+   old lower bound never occurs.
+2. It claimed *"none cut [the drawdown]; −15%/−20% **deepen** it (−6pp, −4pp)"*. This is **backwards**.
+   Every stop-loss level *shallows* the drawdown (−33.0% → −29.4% … −32.8%), and the best take-profit
+   reaches −28.4%. Mechanically it could hardly be otherwise: exiting into cash truncates the fall.
+
+The correct statement is therefore sharper than the old one, and it matters for how the −33% is
+understood: **per-name stops are the first lever in A1-A9 that measurably dents the drawdown (by up to
+~4.6pp) — they are rejected not because they fail to cut it, but because they give back more CAGR
+(10.5% → 7.5-9.7%) than the cut is worth.** The drawdown is not untouchable; it is untouchable *at a
+price worth paying*. Old take-profit claim (+0.04, single-2015-event) is directionally right in kind:
+the effect is small, non-monotone and regime-unstable, though the magnitude is +0.021, not +0.04.
 
 ## CSI500-native factors (follow-up to A6): a real signal, but unharvestable long-only
 
@@ -251,7 +301,10 @@ CSI500-native factors, and a first intraday line -- and they converge on one ans
 value + light 1-month-reversal, monthly, top-10 (Calmar ~0.32, maxDD −33%) is the best long-only
 A-share strategy reachable, and there is no new tradeable long-only edge to add.** The −33% is the
 intrinsic, value-style drawdown of harvesting the value premium long-only; no selection / weighting /
-universe / cadence / stop / index hedge removes it. The only structurally different option is a true
+universe / cadence / stop / index hedge removes it. Per-name stops (A9) are the one lever that
+measurably *dents* it — up to ~4.6pp — but they surrender more CAGR than the dent is worth, so the
+drawdown is better described as uncured *at any price worth paying* than as untouchable. The only
+structurally different option is a true
 long-short book (hedge the style / harvest the small-cap short signal), gated by costly, scarce,
 retail-infeasible A-share securities lending. The deployable frontier for this account is now operational -- run the
 paper record forward to make the 0.32 Calmar credible out-of-sample -- and capacity-aware, not another
