@@ -30,6 +30,7 @@ import numpy as np
 import pandas as pd
 
 from .frictions import AShareCosts
+from .stops import StopSpec, exit_fill_price, update_cost_basis
 
 
 @dataclass
@@ -44,6 +45,8 @@ class PortfolioResult:
     total_costs: float
     trades: list[dict] = field(default_factory=list)   # audit log if collect_trades=True:
     #   {date, code, shares (+buy/-sell), price (exec, incl. slippage), fee}
+    #   fills forced by a stop-loss / take-profit exit also carry "reason": "stop". They can only
+    #   appear when the opt-in stops overlay is on, so the deployed/paper schema is unchanged.
 
 
 def _max_drawdown(eq: np.ndarray) -> float:
@@ -191,13 +194,21 @@ def _score_backtest(price: pd.DataFrame, scores: pd.DataFrame, capital: float,
                     n_hold: int, costs: AShareCosts | None, members_asof,
                     exposure_asof=None, weight_asof=None, rebalance_band: int = 0,
                     collect_trades: bool = False, limit_block: pd.DataFrame | None = None,
-                    rebalance_freq: str = "M", initial_rebalance: bool = False) -> PortfolioResult:
+                    rebalance_freq: str = "M", initial_rebalance: bool = False,
+                    stops: StopSpec | None = None, high: pd.DataFrame | None = None,
+                    low: pd.DataFrame | None = None) -> PortfolioResult:
     """Engine: each month hold the top-`n_hold` names by `scores` (read at the month-end
     signal date, executed next trading day), with A-share frictions. Weighting is equal
     by default; `weight_asof` supplies an alternative intra-basket weighting (e.g.
     inverse-vol) WITHOUT changing the gross-invested fraction, so a weighting scheme is
     compared to equal weight on like terms. `rebalance_band` adds a turnover buffer (see
-    _select_top): incumbents are kept while within the top n_hold+band, cutting churn."""
+    _select_top): incumbents are kept while within the top n_hold+band, cutting churn.
+
+    `stops`: optional per-name stop-loss / take-profit overlay (research.backtest.stops), checked
+    every bar BEFORE any rebalance -- so a name is never stopped on the bar that bought it, and the
+    proceeds sit in cash until the next rebalance. OFF (None) by default: the deployed book has no
+    price stops, and with `stops=None` this function is bit-identical to its pre-stops behaviour.
+    `high`/`low` are only read by the "intraday" trigger mode."""
     costs = costs or AShareCosts()
     lot = costs.lot_size
     slip = costs.slip
@@ -216,6 +227,8 @@ def _score_backtest(price: pd.DataFrame, scores: pd.DataFrame, capital: float,
 
     cash = float(capital)
     positions: dict[str, int] = {}
+    basis: dict[str, float] = {}           # share-weighted cost basis, only maintained when stops are on
+    stops_on = stops is not None and stops.active
     total_costs = 0.0
     names_held_daily = []
     equity = np.empty(n)
@@ -232,6 +245,7 @@ def _score_backtest(price: pd.DataFrame, scores: pd.DataFrame, capital: float,
             lv = last_valid.get(code)
             if lv is not None and di > lv:
                 qty = positions.pop(code)
+                basis.pop(code, None)
                 turnover = qty * last_price[code]
                 fee = costs.sell_fees(turnover)
                 cash += turnover - fee
@@ -239,6 +253,28 @@ def _score_backtest(price: pd.DataFrame, scores: pd.DataFrame, capital: float,
                 if collect_trades:
                     trades.append({"date": di, "code": code, "shares": -qty,
                                    "price": last_price[code], "fee": fee})
+
+        # Stop-loss / take-profit exits, evaluated BEFORE the rebalance so a name bought at this
+        # bar's close cannot be stopped on the same bar. A breached name is liquidated in full and
+        # its proceeds stay in cash until the next rebalance (which may buy it back if it ranks).
+        if stops_on and positions:
+            hi = high.iloc[i] if high is not None else None
+            lo = low.iloc[i] if low is not None else None
+            exits = {}
+            for code in list(positions.keys()):
+                px = exit_fill_price(
+                    stops, basis.get(code, 0.0), raw.get(code, np.nan),
+                    np.nan if lo is None else lo.get(code, np.nan),
+                    np.nan if hi is None else hi.get(code, np.nan))
+                if px is not None:
+                    exits[code] = px
+            if exits:
+                cash, cost_delta, fills = execute_orders(
+                    cash, positions, dict.fromkeys(exits, 0), pd.Series(exits), costs, slip, lot)
+                total_costs += cost_delta
+                update_cost_basis(basis, positions, fills)
+                if collect_trades:
+                    trades.extend({**f, "date": di, "reason": "stop"} for f in fills)
 
         if i in rebal_exec:
             sd = dates[rebal_exec[i]]          # signal (month-end) date
@@ -270,6 +306,8 @@ def _score_backtest(price: pd.DataFrame, scores: pd.DataFrame, capital: float,
                     cash, cost_delta, fills = execute_orders(cash, positions, desired, raw, costs,
                                                              slip, lot, block_buy, block_sell)
                     total_costs += cost_delta
+                    if stops_on:
+                        update_cost_basis(basis, positions, fills)
                     if collect_trades:
                         trades.extend({**fl, "date": di} for fl in fills)
 
@@ -304,7 +342,9 @@ def signal_portfolio_backtest(price: pd.DataFrame, signal: pd.DataFrame, capital
                               members_asof=None, exposure_asof=None,
                               weight_asof=None, rebalance_band: int = 0,
                               collect_trades: bool = False, limit_block: pd.DataFrame | None = None,
-                              rebalance_freq: str = "M", initial_rebalance: bool = False) -> PortfolioResult:
+                              rebalance_freq: str = "M", initial_rebalance: bool = False,
+                              stops: StopSpec | None = None, high: pd.DataFrame | None = None,
+                              low: pd.DataFrame | None = None) -> PortfolioResult:
     """Top-N by an external `signal` panel (date x code), e.g. walk-forward ML
     out-of-sample predictions. `price` is the forward-adjusted close panel for exec/valuation.
     `exposure_asof`: optional callable(signal_date)->float in [0,1] scaling gross
@@ -317,7 +357,10 @@ def signal_portfolio_backtest(price: pd.DataFrame, signal: pd.DataFrame, capital
     blocks buys at the up-limit / sells at the down-limit on the exec day. OFF (None) by default
     -- liquid HS300 doesn't need it; supply it for the CSI500/small-cap universe.
     `initial_rebalance`: also rebalance on the FIRST bar (signal read & executed that day) -- used by
-    paper trading to invest fully at its inception date instead of waiting for the first month-end."""
+    paper trading to invest fully at its inception date instead of waiting for the first month-end.
+    `stops`: optional per-name stop-loss / take-profit overlay (research.backtest.stops). OFF by
+    default -- the deployed book has no price stops (A9). `high`/`low` are needed only when the spec
+    uses the "intraday" trigger."""
     return _score_backtest(price, signal, capital, n_hold, costs, members_asof,
                            exposure_asof, weight_asof, rebalance_band, collect_trades, limit_block,
-                           rebalance_freq, initial_rebalance)
+                           rebalance_freq, initial_rebalance, stops, high, low)
