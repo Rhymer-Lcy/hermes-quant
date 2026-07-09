@@ -8,7 +8,11 @@ drawdown -- see the caveat. This result corrects an earlier under-sampled versio
 concluded "nothing helps"; that error, and how it was caught, are recorded below.
 
 All results: survivorship-free PIT HS300, A-share frictions, top-10 monthly, 2015-2025.
-Reproduce: `python scripts/multifactor_study.py`.
+Reproduce: `python scripts/multifactor_study.py`. The study scripts pin `END = "2025-12-31"`,
+because the daily lake keeps growing under the live paper feed: an unpinned run silently reports a
+longer window and stops reproducing the numbers below. (Extending the window to mid-2026 lowers the
+deployed net Calmar 0.32 → 0.30 on an unchanged −33.0% maxDD — soft 2025/2026 CAGR, not a new
+drawdown; see [oos_decay.md](oos_decay.md).)
 
 ## 1. Diagnosis — a screen, not a proof
 
@@ -86,16 +90,18 @@ Swept on HS300, top-10 monthly, 1M, net & gross, measuring sector concentration 
 
 | config                    | net Calmar | gross Calmar | maxDD  | sector HHI | max sector |
 |---------------------------|-----------:|-------------:|-------:|-----------:|-----------:|
-| value (base)              | 0.26       | 0.27         | -33.6% | 0.60       | 71% |
-| **value + rev 5/1 (deployed)** | **0.30** | **0.32**  | -33.0% | 0.58       | 70% |
-| value + quality 2/1       | 0.11       | 0.12         | -46.1% | 0.43       | 57% |
-| value + quality 1/1       | 0.03       | 0.03         | -64.9% | 0.26       | 39% |
-| val + qual + rev 3/2/1    | 0.12       | 0.16         | -38.3% | 0.33       | 46% |
-| 5-factor equal (ep,roe,rev,mom,lowvol) | 0.20 | 0.25    | -41.2% | 0.37       | 51% |
+| value (base)              | 0.28       | 0.30         | -33.6% | 0.60       | 71% |
+| **value + rev 5/1 (deployed)** | **0.32** | **0.34**  | -33.0% | 0.58       | 69% |
+| value + quality 2/1       | 0.12       | 0.13         | -46.1% | 0.43       | 57% |
+| value + quality 1/1       | 0.02       | 0.03         | -64.9% | 0.26       | 39% |
+| val + qual + rev 4/2/1    | 0.19       | 0.22         | -40.0% | 0.39       | 53% |
+| val + qual + rev 3/2/1    | 0.15       | 0.19         | -38.3% | 0.33       | 46% |
+| val + qual + rev + mom 3/2/1/1 | 0.20  | 0.23         | -36.6% | 0.33       | 46% |
+| 5-factor equal (ep,roe,rev,mom,lowvol) | 0.22 | 0.26    | -41.2% | 0.38       | 51% |
 
 Diversification works on concentration (HHI 0.60 → 0.33, max-sector 71% → 46%) but is
-counterproductive on every return/risk axis: net and gross Calmar fall (0.30 → 0.11-0.20) and
-maxDD deepens (-33% → -38% to -65%). The gross collapse indicates genuine signal degradation,
+counterproductive on every return/risk axis: net and gross Calmar fall (0.32 → 0.02-0.22) and
+maxDD deepens (-33% → -37% to -65%). The gross collapse indicates genuine signal degradation,
 not a friction artifact. This is the third independent confirmation (after A3 sector-neutral,
 A4 size) that in HS300 the cheap-bank concentration is load-bearing -- it is the source of both
 the return and the residual defensiveness. ROE in HS300 tilts toward expensive growth (liquor/tech at

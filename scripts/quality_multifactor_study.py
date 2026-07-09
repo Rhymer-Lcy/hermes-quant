@@ -24,16 +24,19 @@ from hermes.research.factors import library as fl
 
 N_HOLD = 10
 CAP = 1_000_000
+# Pin the evaluation window. The lake is refreshed daily by the paper feed, so an unpinned study
+# silently re-reports a LONGER window each run and stops reproducing the numbers in docs/. Same
+# convention as csi500_universe_study.py.
+END = "2025-12-31"
 
 
 def main() -> None:
     mdf = pd.read_parquet(MEMBERSHIP_PARQUET)
     union = sorted(mdf["code"].unique())
     asof = membership_lookup(mdf)
-    close = load_close_panel(codes=union, field="close")
-    pe = load_close_panel(codes=union, field="peTTM")
-    pb = load_close_panel(codes=union, field="pbMRQ")
-    ps = load_close_panel(codes=union, field="psTTM")
+    close = load_close_panel(codes=union, field="close", end=END)
+    pe = load_close_panel(codes=union, field="peTTM", end=END)
+    pb = load_close_panel(codes=union, field="pbMRQ", end=END)
 
     ep = fl.restrict_to_universe(fl.earnings_yield(pe), asof)
     q = fl.restrict_to_universe(fl.roe(pe, pb), asof)

@@ -25,6 +25,10 @@ from hermes.research.factors import library as fl
 
 TIERS = [100_000, 1_000_000, 10_000_000]
 N_HOLD = 10
+# Pin the evaluation window. The lake is refreshed daily by the paper feed, so an unpinned study
+# silently re-reports a LONGER window each run and stops reproducing the numbers in docs/. Same
+# convention as csi500_universe_study.py.
+END = "2025-12-31"
 
 
 def main() -> None:
@@ -32,10 +36,10 @@ def main() -> None:
     union = sorted(mdf["code"].unique())
     asof = membership_lookup(mdf)
 
-    close = load_close_panel(codes=union, field="close")
-    ep = fl.earnings_yield(load_close_panel(codes=union, field="peTTM"))
-    bp = fl.book_yield(load_close_panel(codes=union, field="pbMRQ"))
-    ps = load_close_panel(codes=union, field="psTTM")
+    close = load_close_panel(codes=union, field="close", end=END)
+    ep = fl.earnings_yield(load_close_panel(codes=union, field="peTTM", end=END))
+    bp = fl.book_yield(load_close_panel(codes=union, field="pbMRQ", end=END))
+    ps = load_close_panel(codes=union, field="psTTM", end=END)
     sp = (1.0 / ps).where(ps > 0)
     lowvol = fl.low_vol(close, 120)
     rev1 = -fl.trailing_return(close, 20)       # 1-month reversal
