@@ -44,3 +44,23 @@ def require(key: str) -> str:
 def tushare_token() -> str | None:
     """Optional — only needed for fields BaoStock lacks. None if unset."""
     return get("TUSHARE_TOKEN")
+
+
+# --- optional network proxy ---------------------------------------------------------
+# requests/urllib honor the standard HTTP_PROXY / HTTPS_PROXY / NO_PROXY environment
+# variables. To route fetches through a local proxy without hardcoding it in source,
+# set them in .env.local; they are exported to the process environment at import (only
+# when not already set — the real environment always wins). BaoStock/Tushare are
+# domestic and normally need NO proxy: leave these unset unless your network requires
+# one, as a foreign-bound proxy can break domestic APIs.
+_PROXY_KEYS = ("HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY")
+
+
+def _export_proxy_env() -> None:
+    for key in _PROXY_KEYS:
+        val = _FILE_ENV.get(key)
+        if val and not os.environ.get(key) and not os.environ.get(key.lower()):
+            os.environ[key] = val
+
+
+_export_proxy_env()
