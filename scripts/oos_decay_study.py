@@ -54,6 +54,7 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 
+from hermes.data.ingest import BACKTEST_END
 from hermes.data.lake import load_close_panel
 from hermes.data.membership import MEMBERSHIP_PARQUET, membership_lookup
 from hermes.live.strategy import DEPLOYED, deployed_signal
@@ -74,17 +75,17 @@ N_Q = 5                       # quintiles for the Q5-Q1 diagnostic spread (HS300
 REGIMES = [
     ("2015-2018  pre/early",  "2015-01-01", "2018-12-31"),
     ("2019-2021  transition", "2019-01-01", "2021-12-31"),
-    ("2022-2025  post",       "2022-01-01", "2025-12-31"),
+    ("2022-2025  post",       "2022-01-01", BACKTEST_END),
 ]
 COARSE = [
     ("EARLY   2015-2020", "2015-01-01", "2020-12-31"),
-    ("HOLDOUT 2021-2025", "2021-01-01", "2025-12-31"),
+    ("HOLDOUT 2021-2025", "2021-01-01", BACKTEST_END),
 ]
 TRAILING = [
-    ("trailing 2023-2025", "2023-01-01", "2025-12-31"),
-    ("trailing 2024-2025", "2024-01-01", "2025-12-31"),
+    ("trailing 2023-2025", "2023-01-01", BACKTEST_END),
+    ("trailing 2024-2025", "2024-01-01", BACKTEST_END),
 ]
-FULL = ("FULL    2015-2025", "2015-01-01", "2025-12-31")
+FULL = ("FULL    2015-2025", "2015-01-01", BACKTEST_END)
 
 
 # --- IC-series inference (mirrors plutus crsp_oos_inference._pooled) -----------------
@@ -242,9 +243,9 @@ def main() -> None:
     # Print the boundary sensitivity so the verdict rests on "positive & not-distinguishable-from
     # -early" (robust), not on "t>2 in this one window" (fragile).
     print("\n  holdout-boundary fragility (recent-window IC significance is boundary-dependent):")
-    for lab, lo, hi in [("2020-2025", "2020-01-01", "2025-12-31"),
-                        ("2021-2025", "2021-01-01", "2025-12-31"),
-                        ("2022-2025", "2022-01-01", "2025-12-31")]:
+    for lab, lo, hi in [("2020-2025", "2020-01-01", BACKTEST_END),
+                        ("2021-2025", "2021-01-01", BACKTEST_END),
+                        ("2022-2025", "2022-01-01", BACKTEST_END)]:
         c, e = _win(ic_comp, lo, hi), _win(ic_ep, lo, hi)
         print(f"    {lab}: composite t={c['t']:+.2f} p={c['p']:.3f}   ep-only t={e['t']:+.2f} p={e['p']:.3f}")
 

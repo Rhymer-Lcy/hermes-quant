@@ -14,6 +14,7 @@ BEFORE standardization (else the union leaks -- see A2 / risk_control.md).
 """
 import pandas as pd
 
+from hermes.data.ingest import BACKTEST_END
 from hermes.data.lake import load_close_panel
 from hermes.data.membership import MEMBERSHIP_PARQUET, membership_lookup
 from hermes.paths import BACKTESTS_DIR
@@ -28,7 +29,7 @@ N_HOLD = 10
 # Pin the evaluation window. The lake is refreshed daily by the paper feed, so an unpinned study
 # silently re-reports a LONGER window each run and stops reproducing the numbers in docs/. Same
 # convention as csi500_universe_study.py.
-END = "2025-12-31"
+END = BACKTEST_END        # single source of truth (data.ingest); do NOT re-hardcode
 
 
 def main() -> None:

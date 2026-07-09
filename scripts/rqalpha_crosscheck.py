@@ -70,7 +70,7 @@ def run_one(capital: float) -> dict:
     config = {
         "base": {
             "start_date": "2015-01-01",
-            "end_date": "2025-12-31",
+            "end_date": BACKTEST_END,
             "frequency": "1d",
             "accounts": {"stock": capital},
         },

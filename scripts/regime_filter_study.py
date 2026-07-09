@@ -6,6 +6,7 @@ filter -- survivorship-free (PIT) and with A-share frictions.
 """
 import pandas as pd
 
+from hermes.data.ingest import BACKTEST_END
 from hermes.data.lake import load_close_panel
 from hermes.data.membership import MEMBERSHIP_PARQUET, membership_lookup
 from hermes.data.sources import baostock_source as bss
@@ -28,7 +29,7 @@ def main() -> None:
     value = fl.earnings_yield(load_close_panel(codes=union, field="peTTM"))
 
     with bss.session():
-        idx = bss.index_close(INDEX, "2014-01-01", "2025-12-31")   # +1y for MA warm-up
+        idx = bss.index_close(INDEX, "2014-01-01", BACKTEST_END)   # +1y for MA warm-up
     exposure = trend_exposure(idx, MA_WINDOW)
     asof_regime = exposure_lookup(exposure)
     print(f"{INDEX} {MA_WINDOW}d-MA filter: risk-on {float((exposure.dropna() > 0).mean()):.0%} "

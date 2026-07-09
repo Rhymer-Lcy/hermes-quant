@@ -10,6 +10,7 @@ beta removed); integer IF contracts (¥300/pt). 2015-2025. `python scripts/index
 import numpy as np
 import pandas as pd
 
+from hermes.data.ingest import BACKTEST_END
 from hermes.data.lake import load_close_panel
 from hermes.data.membership import MEMBERSHIP_PARQUET, membership_lookup
 from hermes.data.sources import baostock_source as bss
@@ -17,7 +18,7 @@ from hermes.live.strategy import deployed_signal
 from hermes.research.backtest.hedge import cagr, hedge_overlay, max_drawdown
 from hermes.research.backtest.portfolio import signal_portfolio_backtest
 
-END = "2025-12-31"
+END = BACKTEST_END        # single source of truth (data.ingest); do NOT re-hardcode
 
 
 def ann_vol(eq: pd.Series) -> float:

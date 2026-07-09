@@ -20,6 +20,7 @@ from collections import Counter
 import numpy as np
 import pandas as pd
 
+from hermes.data.ingest import BACKTEST_END
 from hermes.data.lake import load_close_panel
 from hermes.data.membership import (CSI500_MEMBERSHIP_PARQUET, MEMBERSHIP_PARQUET,
                                     membership_lookup)
@@ -28,7 +29,7 @@ from hermes.research.backtest.limits import limit_flags
 from hermes.research.backtest.portfolio import signal_portfolio_backtest as BT
 from hermes.live.strategy import deployed_signal
 
-END = "2025-12-31"
+END = BACKTEST_END        # single source of truth (data.ingest); do NOT re-hardcode
 
 
 def cal(r):

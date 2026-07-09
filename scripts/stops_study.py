@@ -24,6 +24,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
+from hermes.data.ingest import BACKTEST_END
 from hermes.data.lake import load_close_panel
 from hermes.data.membership import MEMBERSHIP_PARQUET, membership_lookup
 from hermes.live.strategy import DEPLOYED, deployed_signal
@@ -36,14 +37,14 @@ CAP = 1_000_000
 N_HOLD = DEPLOYED.n_hold
 # Pin the window: the lake grows daily under the paper feed, so an unpinned study stops reproducing
 # the numbers in docs/ (same convention as multifactor_study.py / csi500_universe_study.py).
-END = "2025-12-31"
+END = BACKTEST_END        # single source of truth (data.ingest); do NOT re-hardcode
 
 STOP_LEVELS = [0.10, 0.15, 0.20, 0.25]
 TAKE_LEVELS = [0.15, 0.20, 0.30, 0.50]
 TRIGGERS = ["close", "intraday"]
 REGIMES = [("2015-2018", "2015-01-01", "2018-12-31"),
            ("2019-2021", "2019-01-01", "2021-12-31"),
-           ("2022-2025", "2022-01-01", "2025-12-31")]
+           ("2022-2025", "2022-01-01", END)]
 
 
 def cal(r) -> float:

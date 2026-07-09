@@ -16,6 +16,7 @@ the -33% is systematic whole-market beta, uncuttable from inside the HS300 large
 """
 import pandas as pd
 
+from hermes.data.ingest import BACKTEST_END
 from hermes.data.lake import load_close_panel
 from hermes.data.membership import MEMBERSHIP_PARQUET, membership_lookup
 from hermes.paths import BACKTESTS_DIR
@@ -42,7 +43,7 @@ def main() -> None:
     cap = fl.float_cap(amount, turn)
 
     # Sanity-check the free reconstruction (in ×10^8 CNY) against known mega-caps.
-    pdt = cap.index[cap.index <= pd.Timestamp("2025-12-31")][-1]
+    pdt = cap.index[cap.index <= pd.Timestamp(BACKTEST_END)][-1]
     print(f"free-float cap reconstruction @ {pdt.date()} (×10^8 CNY), {cap.notna().sum().sum() / amount.notna().sum().sum():.1%} bar coverage:")
     for c in ["sh.600000", "sh.601318", "sh.600519"]:
         if c in cap.columns and pd.notna(cap.loc[pdt, c]):
