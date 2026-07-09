@@ -23,7 +23,6 @@ dependencies = [
     "matplotlib",
     "akshare",
     "baostock",
-    "tushare",
 ]
 
 [project.optional-dependencies]
@@ -31,6 +30,10 @@ dev = ["pytest"]
 # vnpy etc. are installed editable from ./external (pip install -e external/vnpy),
 # kept out of `dependencies` so secondary-dev edits take effect.
 notebooks = ["jupyterlab"]
+# Unused by the deployed pipeline (BaoStock supplies both the lake and PIT membership). The
+# adapter in data/sources/tushare_source.py is retained as a reference for a possible paid tier
+# and imports tushare lazily, so a default install does not pull it.
+tushare = ["tushare"]
 
 [project.urls]
 Repository = "https://github.com/Rhymer-Lcy/hermes-quant"

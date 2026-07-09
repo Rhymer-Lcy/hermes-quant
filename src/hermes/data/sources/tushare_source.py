@@ -8,6 +8,10 @@ RETIRED size path: the size factor was tested and REJECTED (A4 -- a size tilt de
 drawdown; see docs/risk_control.md), and free-float cap now reconstructs from the BaoStock daily
 lake via fl.float_cap with NO Tushare pull. This adapter is therefore unused by the deployed
 pipeline and kept only as a reference for a possible higher Tushare tier; there is no size-pull script.
+
+Because nothing in the pipeline calls it, `tushare` is an OPTIONAL extra (`pip install -e '.[tushare]'`)
+and is imported lazily inside `_api()`. Importing this module -- and calling the pure `to_ts_code`
+helper -- therefore works on a default install where tushare is absent; only a live pull needs it.
 """
 from __future__ import annotations
 
@@ -15,7 +19,6 @@ import time
 from typing import Any
 
 import pandas as pd
-import tushare as ts
 
 from ...config import tushare_token
 from ...paths import PARQUET_DIR, ensure_dirs
@@ -26,6 +29,8 @@ _PRO = None
 def _api() -> Any:
     global _PRO
     if _PRO is None:
+        import tushare as ts  # optional extra; only a live pull requires it
+
         ts.set_token(tushare_token())
         _PRO = ts.pro_api()
     return _PRO

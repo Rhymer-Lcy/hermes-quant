@@ -75,8 +75,8 @@ python scripts/probes/smoke_baostock.py    # verify the data link
 
 | Source | Auth | Role |
 |---|---|---|
-| **BaoStock** | none (anonymous) | free historical daily backbone — start here |
-| **Tushare Pro** | free token (some fields need credits) | financials, point-in-time index members, delisting |
+| **BaoStock** | none (anonymous) | the deployed pipeline's sole source: historical daily backbone (incl. delisted names) **and** point-in-time HS300/CSI500 membership |
+| **Tushare Pro** | free token (optional extra, not installed by default) | **unused** — adapter kept only as a reference for a possible paid tier; free-float cap now reconstructs from the BaoStock lake |
 | **AKShare** | none (scraper) | realtime L1 snapshot for paper trading only — fragile, not for the historical backbone |
 
 Backtest window: **2015-01-01 → present** (multi-regime), with the most recent ~1–2 years
@@ -89,7 +89,7 @@ survivorship bias. Price-limit rules differ by board/date (STAR Market/ChiNext =
 src/hermes/        the engine — importable package (src-layout); no trading-framework dependency
   config.py        secret/token loading (env → .env.local)
   paths.py, io.py  on-disk locations; atomic file writes
-  data/            vendor adapters (BaoStock/Tushare) → adjusted parquet lake; PIT HS300 membership
+  data/            vendor adapters (BaoStock; optional Tushare) → adjusted parquet lake; PIT HS300 membership
   research/
     backtest/      friction-faithful backtest engine: portfolio, frictions, limits, hedge, sizing, regime
     factors/       factor library (value, reversal, low-vol, size, quality)

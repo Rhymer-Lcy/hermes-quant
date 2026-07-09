@@ -40,9 +40,12 @@ strongest pairing, though neither is usable as-is:
 
 ## Data
 
-- **BaoStock** (free, anonymous, API) — historical daily backbone; the primary source.
-- **Tushare Pro** (free token; some fields need credits) — financials, point-in-time index
-  membership, delisting. Add when needed.
+- **BaoStock** (free, anonymous, API) — the deployed pipeline's *sole* source: the historical
+  daily backbone (incl. delisted names) and point-in-time HS300/CSI500 index membership.
+- **Tushare Pro** (free token; optional extra, not installed by default) — **unused**. The
+  adapter (`data/sources/tushare_source.py`) is retained only as a reference for a possible paid
+  tier: its purpose was market cap for the size factor, but free-float cap now reconstructs from
+  the BaoStock lake (`fl.float_cap`) and the size tilt was rejected outright (A4, risk_control.md).
 - **AKShare** (free, scraper) — realtime L1 snapshot for paper trading only; fragile
   (EastMoney/Sina scraping, with outage and IP-ban risk), never the backbone.
 - Backtest window **2015→present** (multi-regime); hold out the last ~1–2 years for
