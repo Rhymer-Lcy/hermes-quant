@@ -28,7 +28,7 @@ from ..data.membership import (MEMBERSHIP_PARQUET, UNION_CSV,
 from ..data.sources import baostock_source as bss
 from ..data.sources.baostock_source import BaoStockUnavailable
 from ..io import atomic_to_parquet
-from ..paths import RAW_DIR, ensure_dirs
+from ..paths import ensure_dirs
 
 
 def _today() -> str:

@@ -26,7 +26,6 @@ from hermes.data.membership import (CSI500_MEMBERSHIP_PARQUET, MEMBERSHIP_PARQUE
 from hermes.data.sources import baostock_source as bss
 from hermes.research.backtest.limits import limit_flags
 from hermes.research.backtest.portfolio import signal_portfolio_backtest as BT
-from hermes.research.factors import library as fl
 from hermes.live.strategy import deployed_signal
 
 END = "2025-12-31"

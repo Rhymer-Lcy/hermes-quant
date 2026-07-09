@@ -3,7 +3,7 @@ small-account contract-granularity infeasibility."""
 import numpy as np
 import pandas as pd
 
-from hermes.research.backtest.hedge import IF_MULT, hedge_overlay, max_drawdown
+from hermes.research.backtest.hedge import hedge_overlay, max_drawdown
 
 
 def _crash_index():

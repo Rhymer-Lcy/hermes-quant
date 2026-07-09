@@ -10,7 +10,6 @@ removed, so the model learns relative ranking, not beta).
 """
 from __future__ import annotations
 
-import numpy as np
 import pandas as pd
 from lightgbm import LGBMRegressor
 

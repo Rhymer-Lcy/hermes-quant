@@ -86,5 +86,5 @@ def double_ma_backtest(prices: pd.DataFrame, capital: float, fast: int = 20, slo
         max_drawdown=_max_drawdown(equity),
         n_trades=n_trades,
         total_costs=float(total_costs),
-        end_cash_idle=float(cash if shares == 0 else cash),
+        end_cash_idle=float(cash),
     )

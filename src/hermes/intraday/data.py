@@ -57,7 +57,6 @@ def cb_minute(symbol: str, period: str = "5") -> pd.DataFrame:
     sandboxed environments; works on a normal connection). Returns a datetime-indexed OHLCV frame."""
     import akshare as ak
     df = ak.bond_zh_hs_cov_min(symbol=symbol, period=period)
-    cols = {c: c for c in df.columns}
     df = df.rename(columns={"时间": "datetime"}) if "时间" in df.columns else df.rename(columns={df.columns[0]: "datetime"})
     df["datetime"] = pd.to_datetime(df["datetime"])
     return df.set_index("datetime").sort_index()
