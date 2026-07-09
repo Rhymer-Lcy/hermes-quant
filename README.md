@@ -77,7 +77,7 @@ python scripts/probes/smoke_baostock.py    # verify the data link
 |---|---|---|
 | **BaoStock** | none (anonymous) | the deployed pipeline's sole source: historical daily backbone (incl. delisted names) **and** point-in-time HS300/CSI500 membership |
 | **Tushare Pro** | free token (optional extra, not installed by default) | **unused** — adapter kept only as a reference for a possible paid tier; free-float cap now reconstructs from the BaoStock lake |
-| **AKShare** | none (scraper) | realtime L1 snapshot for paper trading only — fragile, not for the historical backbone |
+| **AKShare** | none (scraper) | minute bars for the separate intraday futures line only (`intraday/`) — fragile, never the backbone. Paper trading does **not** use it; it refreshes from BaoStock EOD |
 
 Backtest window: **2015-01-01 → present** (multi-regime), with the most recent ~1–2 years
 held out for walk-forward validation. **Delisted stocks are included** to avoid

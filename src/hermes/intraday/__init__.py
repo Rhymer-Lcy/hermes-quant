@@ -8,9 +8,10 @@ own namespace and data, never touching the validated EOD engine. If it ever beco
 trading system, fork it out then.
 
 Scope decisions (see docs):
-  - Instruments: stock index futures IF/IC (CFFEX) -- T+0, and directly relevant to a future HEDGE OVERLAY
-    that could cut the monthly book's systematic -33% drawdown; plus commodity futures and convertible bonds
-    (both T+0).
+  - Instruments: stock index futures IF/IC (CFFEX) -- T+0; plus commodity futures and convertible bonds
+    (both T+0). NOT a hedge overlay for the monthly book: A8 (docs/risk_control.md) showed no realizable
+    IF/IC/IH short cuts its -33% drawdown, which is an intrinsic value-style tail rather than market beta.
+    This line therefore stands on its own merits as a separate strategy domain.
   - Data: minute bars via AKShare (FREE, no token) -- futures via Sina (verified working: futures_zh_minute_sina
     returns datetime/OHLC/volume/hold). CAVEAT: free minute history is SHALLOW (~recent window) and
     scraper-fragile; deep tick/L2 needs a paid vendor.
