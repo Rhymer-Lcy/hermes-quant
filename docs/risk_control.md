@@ -4,6 +4,8 @@ Plain value (earnings yield), survivorship-free PIT, top-10 equal weight: +9.2% 
 but -33% max drawdown -- not deployable as-is. This log records attempts to cut the
 drawdown without giving back the return. The bar is to raise **Calmar = CAGR / |maxDD|**.
 
+(Sections run A1-A9 with no A5: the label was never assigned, and no experiment is missing.)
+
 ## A1 — market-regime filter (CSI 300 200-day MA): FAILED
 
 Gate gross exposure to 0 when CSI 300 is below its 200-day MA, else 1 (decided monthly,
@@ -207,6 +209,10 @@ not the market -- a structurally different strategy, and A-share securities lend
 scarce, and constrained, so it is not a costless option.
 
 ## A9 — per-name stop-loss / take-profit: REJECTED
+
+REPRODUCIBILITY GAP: unlike A1-A8, no `*_study.py` for this ablation was ever committed, so the
+figures below cannot currently be regenerated from this repo. They are recorded as reported; treat
+them as weaker evidence than the scripted studies until the script is restored.
 
 The deployed book has no price stops; tested as an ablation (full daily-loop, no look-ahead, vs the
 no-stop baseline Calmar ~0.32 / maxDD −33%):
