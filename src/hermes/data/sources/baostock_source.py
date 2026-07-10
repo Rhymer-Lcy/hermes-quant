@@ -152,6 +152,13 @@ def is_session_error(msg: str) -> bool:
     return _SESSION_ERROR_CODE in msg or "未登录" in msg
 
 
+def is_transport_error(msg: str) -> bool:
+    """True if an error message carries the 1000200x transport family (e.g. 网络接收错误). Like a
+    session drop, a degraded connection poisons every subsequent query in a batch (observed: 800
+    straight failures once it started); recovery is the same -- relogin() rebuilds the socket."""
+    return any(code in msg for code in _NETWORK_ERROR_CODES) or "网络" in msg
+
+
 def relogin() -> str | None:
     """Re-establish a dropped session in place (best-effort logout, re-pin the IP, login again).
     Raises BaoStockUnavailable on a transport failure, RuntimeError otherwise; returns the pinned

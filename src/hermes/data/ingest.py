@@ -8,6 +8,8 @@ reintroduce survivorship bias.
 """
 from __future__ import annotations
 
+import time
+
 import pandas as pd
 
 from ..io import atomic_to_parquet
@@ -59,19 +61,25 @@ def pull_universe(codes, start: str = BACKTEST_START, end: str = BACKTEST_END) -
     return pd.DataFrame(results)
 
 
-def _daily_bars_reloginning(code: str, start: str, end: str, attempts: int = 3) -> pd.DataFrame:
-    """daily_bars, recovering from a server-side session drop by re-logging in and retrying.
+def _daily_bars_reloginning(code: str, start: str, end: str, attempts: int = 4) -> pd.DataFrame:
+    """daily_bars, recovering from a degraded connection by re-logging in and retrying.
 
-    BaoStock expires long-lived sessions partway through large serial batches; without recovery
-    every subsequent query fails with "10001001 用户未登录" and the batch runner records hundreds
-    of errors while still exiting 0 -- the failure mode that left the original CSI500 pull 97%
-    empty (28 of 886 names pulled) and silently invalidated the A6 study built on it."""
+    Two failure families surface in large serial batches, and both poison every SUBSEQUENT query
+    until the connection is re-established: a server-side session drop ("10001001 用户未登录")
+    and the transport-error family ("1000200x", e.g. 网络接收错误 -- observed to fail 800 straight
+    names once it starts). Without recovery the batch runner records the cascade as per-name
+    errors while still exiting 0 -- the failure mode that left the original CSI500 pull 97% empty
+    (28 of 886 names) and silently invalidated the A6 study built on it. Re-login (which also
+    re-pins the server IP and rebuilds the socket) with a growing pause, then retry."""
     for attempt in range(attempts):
         try:
             return bss.daily_bars(code, start, end, adjustflag="2")
-        except Exception as exc:  # noqa: BLE001 -- retry only the known session-drop failure
-            if attempt + 1 >= attempts or not bss.is_session_error(str(exc)):
+        except Exception as exc:  # noqa: BLE001 -- retry only the known recoverable families
+            msg = str(exc)
+            recoverable = bss.is_session_error(msg) or bss.is_transport_error(msg)
+            if attempt + 1 >= attempts or not recoverable:
                 raise
+            time.sleep(2.0 ** attempt)                    # 1s, 2s, 4s
             bss.relogin()
     raise AssertionError("unreachable")
 
