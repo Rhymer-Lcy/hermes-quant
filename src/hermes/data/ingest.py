@@ -70,9 +70,11 @@ def _daily_bars_reloginning(code: str, start: str, end: str, attempts: int = 4) 
     until the connection is re-established: a server-side session drop ("10001001 用户未登录")
     and the transport-error family ("1000200x", e.g. 网络接收错误 -- observed to fail 800 straight
     names once it starts). Without recovery the batch runner records the cascade as per-name
-    errors while still exiting 0 -- the failure mode that left the original CSI500 pull 97% empty
-    (28 of 886 names) and silently invalidated the A6 study built on it. Re-login (which also
-    re-pins the server IP and rebuilds the socket) with a growing pause, then retry."""
+    errors while still exiting 0 (a surviving CSI500 pull summary shows one such run: 28 ok of
+    886). The proven danger: a study run against the resulting PARTIAL lake does not merely
+    degrade -- at 35% coverage the A6 backtest INVERTED its verdict (CSI500 value Calmar printed
+    0.32 against the true 0.10). Re-login (which also re-pins the server IP and rebuilds the
+    socket) with a growing pause, then retry."""
     for attempt in range(attempts):
         try:
             return bss.daily_bars(code, start, end, adjustflag="2")

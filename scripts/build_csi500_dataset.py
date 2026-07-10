@@ -26,9 +26,11 @@ def main() -> None:
             print(f"  WARNING: {n_err}/{len(new)} names errored; first: "
                   f"{summary.loc[~summary['status'].eq('ok'), 'status'].iloc[0]}")
 
-    # COVERAGE GATE. The original build silently produced a 97%-empty dataset (a mid-batch session
-    # drop failed 858 of 886 pulls without aborting), and the A6 study then ran on it and published
-    # a conclusion computed from garbage. A dataset build must not report a success it did not achieve.
+    # COVERAGE GATE. A mid-batch connection cascade can fail hundreds of pulls while the build
+    # still exits 0 (a surviving pull summary records one such run: 28 ok of 886), and a study run
+    # against the resulting partial lake does not merely degrade -- at 35% coverage the A6 backtest
+    # INVERTED its verdict (CSI500 value Calmar 0.32 against the true 0.10). A dataset build must
+    # not report a success it did not achieve.
     on_disk = {f.stem for f in daily.glob("*.parquet")}
     covered = sum(1 for c in union if c.replace(".", "_") in on_disk)
     coverage = covered / len(union)

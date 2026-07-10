@@ -13,7 +13,9 @@ large caps).
 
 NOTE: PART 2 (combined universe) needs the CSI500 dataset, which was purged (rejected; see
 docs/risk_control.md A6/A7). Regenerate it first with `python scripts/build_csi500_dataset.py`
-(free, ~minutes via BaoStock); PART 1 (HS300 cadence) runs without it.
+(coverage-gated; run until it reports complete); PART 1 (HS300 cadence) runs without it.
+RE-VERIFIED 2026-07 on a gated full rebuild: PART 1 and PART 2 both reproduce their documented
+rows within +-0.2pp CAGR, verdicts unchanged.
 """
 from collections import Counter
 
@@ -61,6 +63,13 @@ def main() -> None:
     print(f"PART 2 -- combined universe (HS300 657 ∪ CSI500 1326 = {len(comb_union)} names), value+rev 5/1, monthly:")
 
     cclose = load_close_panel(codes=comb_union, field="close", end=END)
+    # DATA-COMPLETENESS GATE (same as csi500_universe_study): a partial CSI500 lake inverts
+    # conclusions rather than merely degrading them; refuse to study one.
+    have = int(cclose.notna().any().sum())
+    if have / len(comb_union) < 0.99:
+        raise RuntimeError(
+            f"combined-universe data INCOMPLETE: {have}/{len(comb_union)} names have bars "
+            f"({have / len(comb_union):.1%} < 99%). Rebuild with build_csi500_dataset.py first.")
     cpe = load_close_panel(codes=comb_union, field="peTTM", end=END)
     cpre = load_close_panel(codes=comb_union, field="preclose", end=END)
     cst = load_close_panel(codes=comb_union, field="isST", end=END)

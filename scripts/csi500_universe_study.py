@@ -11,8 +11,11 @@ may want a wider basket); net AND gross Calmar; sector concentration measured.
     python scripts/csi500_universe_study.py
 
 NOTE: CSI500 was REJECTED (see docs/risk_control.md A6), so its ~220MB local data was purged to
-reclaim disk. This study is kept as the reproducible audit trail; to re-run it, first regenerate the
-data with `python scripts/build_csi500_dataset.py` (free, ~minutes via BaoStock).
+reclaim disk. To re-run, first regenerate with `python scripts/build_csi500_dataset.py` (free via
+BaoStock; the build recovers from connection cascades and enforces a >=99% coverage gate -- run it
+until it reports complete; pulled files accrete across runs). RE-VERIFIED 2026-07 on a gated full
+rebuild (1326/1326 names): the A6 table reproduces within +-0.2pp CAGR (adjusted-price re-basing;
+second-order), verdict unchanged.
 """
 from collections import Counter
 
@@ -43,9 +46,9 @@ def load_universe(parquet, end=END):
     union = sorted(mdf["code"].unique())
     asof = membership_lookup(mdf)
     close = load_close_panel(codes=union, field="close", end=end)
-    # DATA-COMPLETENESS GATE: the original A6 ran on a 97%-empty CSI500 pull (an unnoticed
-    # mid-batch session-drop cascade) and published a conclusion computed from it. Refuse to
-    # study a universe whose lake is materially incomplete.
+    # DATA-COMPLETENESS GATE: a partial lake does not merely degrade this study -- run at 35%
+    # coverage (after a silent mid-batch pull cascade) it INVERTED the A6 verdict, printing
+    # CSI500 value Calmar 0.32 against the true 0.10. Refuse to study an incomplete universe.
     have = int(close.notna().any().sum())
     if have / len(union) < 0.99:
         raise RuntimeError(

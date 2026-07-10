@@ -154,6 +154,16 @@ drawdowns (2015/2018 crashes) and lower risk-adjusted returns; more names re-sam
 Quality/diversification (which only cured concentration on HS300) make CSI500 worse still (-70%).
 **Verdict: stay on HS300; CSI500 expansion is rejected.**
 
+RE-VERIFIED 2026-07, with a data-integrity lesson attached. The CSI500 dataset had been purged
+after this study, and regenerating it exposed two silent failure modes in the pull path: a
+server-side session drop and a transport-error cascade, either of which fails hundreds of names
+while the build still exits 0. Run against one such PARTIAL rebuild (35% coverage), this study did
+not merely degrade -- it INVERTED, printing CSI500 value Calmar 0.32 (equal to the deployed book)
+against the true 0.10. The pull path now recovers from both cascades, the build enforces a >=99%
+coverage gate, and the study refuses an incomplete universe. On the gated full rebuild
+(1326/1326 names) every row above reproduces within +-0.2pp CAGR (adjusted-price re-basing;
+second-order); the verdict is unchanged.
+
 ## A7 — rebalance cadence & combined universe: both confirm the deployed config
 
 Two axes flagged as untested (`scripts/cadence_universe_study.py`, HS300 value+rev, 2015-2025):
@@ -168,6 +178,11 @@ that quarterly helps small accounts is refuted.**
 top-10 +2.1% / -60.2% / Calmar 0.03; top-30 +6.4% / -39.6% / 0.16; both far below HS300-alone
 (0.32). The value screen reaches into riskier small-cap deep-value, deepening drawdown. **Do not
 mix; HS300-alone is best** (consistent with A6).
+
+RE-VERIFIED 2026-07 on the gated CSI500 rebuild: cadence rows reproduce exactly; combined top-10
+reproduces exactly (+2.1% / -60.2% / 0.03) and top-30 within +0.2pp CAGR. The rebuilt union counts
+1553 names (one more than the original 1552 -- a single-name difference in the regenerated
+membership); verdicts unchanged.
 
 ## A8 — IF index-futures short hedge: REJECTED (the −33% is value-style, not market-beta)
 
@@ -278,6 +293,12 @@ price worth paying*. Old take-profit claim (+0.04, single-2015-event) is directi
 the effect is small, non-monotone and regime-unstable, though the magnitude is +0.021, not +0.04.
 
 ## CSI500-native factors (follow-up to A6): a real signal, but unharvestable long-only
+
+REPRODUCIBILITY GAP: unlike A1-A9, no `*_study.py` for this follow-up was ever committed, and the
+dataset it ran on was purged (the gated rebuild restores the universe but on a newer adjusted-price
+basis), so the figures below cannot currently be regenerated from this repo. They are recorded as
+reported; treat them as weaker evidence than the scripted studies until a script is restored and
+re-run against the rebuilt dataset.
 
 Re-tested CSI500 with small-cap-native factors (not the HS300-tuned value). A genuine small-cap
 predictor cluster exists at the IC level -- **low turnover-volatility (turnstd20: mean IC +0.084,

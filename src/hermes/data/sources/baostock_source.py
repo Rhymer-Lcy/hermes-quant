@@ -147,8 +147,8 @@ def is_session_error(msg: str) -> bool:
 
     BaoStock silently expires long-lived sessions: partway through a large serial pull every
     subsequent query fails with 10001001 and, without detection, a batch runner records hundreds of
-    "errors" and reports success -- exactly how the original CSI500 dataset ended up 97% empty.
-    Callers that see this should relogin() and retry the failed item."""
+    "errors" and reports success (a surviving CSI500 pull summary shows one such cascade: 28 ok of
+    886). Callers that see this should relogin() and retry the failed item."""
     return _SESSION_ERROR_CODE in msg or "未登录" in msg
 
 
