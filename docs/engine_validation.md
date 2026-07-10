@@ -24,7 +24,8 @@ Conclusions:
 2. The survivorship-free result is **robust** -- not an artifact of one engine/dataset.
 3. Bug 2 (forward-adjusted price levels feeding lot-sizing) is confirmed **second-order**: RQAlpha
    uses true raw prices + dividends and lands at the same conclusion.
-4. The ~25pp CAGR gap vs the survivorship-biased version was pure universe look-ahead.
+4. The ~27-30pp CAGR gap vs the survivorship-biased version (biased +20.4%/+21.5% vs PIT
+   -7.0%/-8.0% at 100k/1M) was pure universe look-ahead.
 
 Caveats (explain the residual ~2pp difference, all second-order): RQAlpha's default
 commission/stamp model differs slightly from the hand-rolled 2.5 bps / 5 bps; RQAlpha skips

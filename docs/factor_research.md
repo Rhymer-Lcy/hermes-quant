@@ -17,15 +17,21 @@ trained only on the past). Equal-weight top-10, A-share frictions, 2015-2025 (ML
 
 ## Walk-forward LightGBM (5 factors) — out-of-sample
 
-mean IC **+0.024** (t +1.47) — below low_vol alone (+0.067). Stacking the weak
+mean IC **+0.014** (t +0.81) — below low_vol alone (+0.067). Stacking the weak
 factors (momentum/reversal) into the model diluted the signal rather than improving it.
+
+> CORRECTED. This section originally reported IC +0.024 (t +1.47) and a stronger ML backtest
+> (+3.1% / +5.7% CAGR). Those numbers predate the survivorship-leak fix recorded in
+> [multi_factor.md](multi_factor.md) ("Fix shipped with this study"): `build_dataset` used to
+> standardize over the survivorship-defined union rather than the then-current members. De-leaked,
+> the ML combiner is weaker still — which strengthens, not weakens, this document's conclusion.
 
 ## PIT backtest, top-10 equal weight (CAGR / max drawdown)
 
 | strategy    | 100k          | 1,000,000     |
 |-------------|--------------:|--------------:|
 | ep (1/PE)   | +9.2% / -33%  | +9.5% / -34%  |
-| ML-5factor  | +3.1% / -47%  | +5.7% / -60%  |
+| ML-5factor  | +1.4% / -49%  | +0.8% / -67%  |
 | low_vol     | -0.3% / -47%  | -0.2% / -47%  |
 | momentum    | -7.0% / -77%  | -8.0% / -88%  |
 
