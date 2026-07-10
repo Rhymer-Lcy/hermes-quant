@@ -58,6 +58,8 @@ def pull_universe(codes, start: str = BACKTEST_START, end: str = BACKTEST_END) -
                 results.append({"code": code, "rows": 0, "status": f"error: {exc}"})
             if i % 25 == 0 or i == n:
                 print(f"  ...{i}/{n} pulled")
+            time.sleep(0.2)          # pace the batch: hammering triggers server-side throttling
+                                     # (observed as a 1000200x cascade, eventually at login itself)
     return pd.DataFrame(results)
 
 
