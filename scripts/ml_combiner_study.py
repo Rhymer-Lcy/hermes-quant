@@ -10,6 +10,7 @@ results/ (signals, backtests).
 """
 import pandas as pd
 
+from hermes.data.ingest import BACKTEST_END
 from hermes.data.lake import load_close_panel
 from hermes.data.membership import MEMBERSHIP_PARQUET, membership_lookup
 from hermes.paths import BACKTESTS_DIR, SIGNALS_DIR, ensure_dirs
@@ -27,9 +28,9 @@ def main() -> None:
     mdf = pd.read_parquet(MEMBERSHIP_PARQUET)
     union = sorted(mdf["code"].unique())
     asof = membership_lookup(mdf)
-    close = load_close_panel(codes=union, field="close")
-    pe = load_close_panel(codes=union, field="peTTM")
-    pb = load_close_panel(codes=union, field="pbMRQ")
+    close = load_close_panel(codes=union, field="close", end=BACKTEST_END)
+    pe = load_close_panel(codes=union, field="peTTM", end=BACKTEST_END)
+    pb = load_close_panel(codes=union, field="pbMRQ", end=BACKTEST_END)
     eval_dates = [pd.Timestamp(d) for d in sorted(mdf["date"].unique())
                   if pd.Timestamp(d) in close.index]
 
@@ -76,10 +77,11 @@ def main() -> None:
                          "total_return": r.total_return, "cagr": r.cagr, "max_dd": r.max_drawdown})
     pd.DataFrame(rows).to_csv(BACKTESTS_DIR / "ml_vs_factors_pit.csv", index=False)
 
-    print("\nAll survivorship-free (PIT membership) + no-look-ahead (walk-forward training). "
-          "Honest read: the ML OOS IC (+0.024) is BELOW low-vol alone (+0.067), so stacking weak "
-          "factors (momentum/reversal) DILUTED the signal. Compare the ML backtest to low_vol / ep "
-          "single factors -- beating momentum is a low bar.")
+    print(f"\nAll survivorship-free (PIT membership) + no-look-ahead (walk-forward training). "
+          f"Honest read: the ML OOS IC ({ic.mean_ic:+.3f}) is BELOW low-vol alone (~+0.067, see "
+          f"factor_ic_study / docs/factor_research.md), so stacking weak factors (momentum/reversal) "
+          f"DILUTED the signal. Compare the ML backtest to low_vol / ep single factors -- beating "
+          f"momentum is a low bar.")
 
 
 if __name__ == "__main__":

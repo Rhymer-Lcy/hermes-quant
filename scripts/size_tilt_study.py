@@ -37,9 +37,9 @@ def main() -> None:
     union = sorted(mdf["code"].unique())
     asof = membership_lookup(mdf)
 
-    close = load_close_panel(codes=union, field="close")
-    amount = load_close_panel(codes=union, field="amount")
-    turn = load_close_panel(codes=union, field="turn")
+    close = load_close_panel(codes=union, field="close", end=BACKTEST_END)
+    amount = load_close_panel(codes=union, field="amount", end=BACKTEST_END)
+    turn = load_close_panel(codes=union, field="turn", end=BACKTEST_END)
     cap = fl.float_cap(amount, turn)
 
     # Sanity-check the free reconstruction (in ×10^8 CNY) against known mega-caps.
@@ -49,7 +49,7 @@ def main() -> None:
         if c in cap.columns and pd.notna(cap.loc[pdt, c]):
             print(f"  {c}: {cap.loc[pdt, c] / 1e8:,.0f} ×10^8")
 
-    ep = fl.earnings_yield(load_close_panel(codes=union, field="peTTM"))
+    ep = fl.earnings_yield(load_close_panel(codes=union, field="peTTM", end=BACKTEST_END))
     size = fl.small_size(cap)                         # higher = smaller cap
     ep_pit = fl.restrict_to_universe(ep, asof)        # IRON RULE 1: PIT before blend
     size_pit = fl.restrict_to_universe(size, asof)

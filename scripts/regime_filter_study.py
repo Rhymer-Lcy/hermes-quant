@@ -25,8 +25,8 @@ def main() -> None:
     mdf = pd.read_parquet(MEMBERSHIP_PARQUET)
     union = sorted(mdf["code"].unique())
     asof_members = membership_lookup(mdf)
-    close = load_close_panel(codes=union, field="close")
-    value = fl.earnings_yield(load_close_panel(codes=union, field="peTTM"))
+    close = load_close_panel(codes=union, field="close", end=BACKTEST_END)
+    value = fl.earnings_yield(load_close_panel(codes=union, field="peTTM", end=BACKTEST_END))
 
     with bss.session():
         idx = bss.index_close(INDEX, "2014-01-01", BACKTEST_END)   # +1y for MA warm-up
@@ -50,7 +50,8 @@ def main() -> None:
 
     print("\nThe filter earns its keep only if it RAISES Calmar (= CAGR / |maxDD|): cutting "
           "drawdown more than it cuts return. If it just lowers both proportionally, it is not "
-          "helping. Next (A2): volatility targeting + per-name weight caps.")
+          "helping. The follow-up lever (A2, inverse-vol weighting) was tested and partially "
+          "adopted -- see docs/risk_control.md.")
 
 
 if __name__ == "__main__":

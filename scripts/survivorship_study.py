@@ -12,6 +12,7 @@ Prereq: python scripts/build_pit_dataset.py  (membership + union price history)
 """
 import pandas as pd
 
+from hermes.data.ingest import BACKTEST_END
 from hermes.data.lake import load_close_panel
 from hermes.data.membership import MEMBERSHIP_PARQUET, membership_lookup
 from hermes.research import CAPITAL_TIERS
@@ -24,7 +25,7 @@ LOOKBACK = 20
 def main() -> None:
     mdf = pd.read_parquet(MEMBERSHIP_PARQUET)
     union = sorted(mdf["code"].unique())
-    panel = load_close_panel(codes=union)
+    panel = load_close_panel(codes=union, end=BACKTEST_END)
     print(f"union: {len(union)} names ever in HS300, {mdf['date'].nunique()} monthly "
           f"snapshots, panel {panel.shape[0]} days\n")
 

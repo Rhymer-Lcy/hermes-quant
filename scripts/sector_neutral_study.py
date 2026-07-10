@@ -21,6 +21,7 @@ sector ATTRIBUTION on a wider universe). Same verdict as A1/A2/A4/B: the -33% is
 import numpy as np
 import pandas as pd
 
+from hermes.data.ingest import BACKTEST_END
 from hermes.data.lake import load_close_panel
 from hermes.data.membership import MEMBERSHIP_PARQUET, membership_lookup
 from hermes.data.sources import baostock_source as bss
@@ -72,8 +73,8 @@ def main() -> None:
     mdf = pd.read_parquet(MEMBERSHIP_PARQUET)
     union = sorted(mdf["code"].unique())
     asof = membership_lookup(mdf)
-    close = load_close_panel(codes=union, field="close")
-    ep = fl.earnings_yield(load_close_panel(codes=union, field="peTTM"))
+    close = load_close_panel(codes=union, field="close", end=BACKTEST_END)
+    ep = fl.earnings_yield(load_close_panel(codes=union, field="peTTM", end=BACKTEST_END))
     ep_pit = fl.restrict_to_universe(ep, asof)
 
     with bss.session():

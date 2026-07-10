@@ -19,6 +19,7 @@ needs no such fix: it weights only the already-selected names by their own retur
 """
 import pandas as pd
 
+from hermes.data.ingest import BACKTEST_END
 from hermes.data.lake import load_close_panel
 from hermes.data.membership import MEMBERSHIP_PARQUET, membership_lookup
 from hermes.paths import BACKTESTS_DIR
@@ -37,8 +38,8 @@ def main() -> None:
     union = sorted(mdf["code"].unique())
     asof_members = membership_lookup(mdf)
 
-    close = load_close_panel(codes=union, field="close")
-    value = fl.earnings_yield(load_close_panel(codes=union, field="peTTM"))
+    close = load_close_panel(codes=union, field="close", end=BACKTEST_END)
+    value = fl.earnings_yield(load_close_panel(codes=union, field="peTTM", end=BACKTEST_END))
     # PIT-correct blend: restrict each input to the then-current members BEFORE the
     # cross-sectional standardization inside blend() (else the union leaks -- see module
     # docstring). Single-factor `value` ranks raw, so it needs no restriction.

@@ -124,8 +124,9 @@ def main() -> None:
           "the robust read. KEY CAVEAT: the gain is all in the NUMERATOR (CAGR ~+1pp); maxDD "
           "stays ~-33%, so the systematic drawdown is NOT cured. Inverse-vol doesn't stack "
           "(reversal already supplies the diversification) and the turnover buffer hurts. To "
-          "cut the drawdown itself, untried levers remain: sector-neutralization, the deferred "
-          "size factor, and a wider universe (CSI 500/1000) -- all needing new data ingestion.")
+          "cut the drawdown itself, the remaining levers (sector-neutralization A3, size tilt A4, "
+          "wider universe A6/A7, index hedge A8, per-name stops A9) were tested AFTER this study "
+          "and ALL rejected -- see docs/risk_control.md.")
 
 
 if __name__ == "__main__":

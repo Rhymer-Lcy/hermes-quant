@@ -8,6 +8,7 @@ month-end dates over the then-current HS300 members.
 """
 import pandas as pd
 
+from hermes.data.ingest import BACKTEST_END
 from hermes.data.lake import load_close_panel
 from hermes.data.membership import MEMBERSHIP_PARQUET, membership_lookup
 from hermes.research.eval.factor_eval import compute_ic, quantile_returns
@@ -19,9 +20,9 @@ def main() -> None:
     union = sorted(mdf["code"].unique())
     asof = membership_lookup(mdf)
 
-    close = load_close_panel(codes=union, field="close")
-    pe = load_close_panel(codes=union, field="peTTM")
-    pb = load_close_panel(codes=union, field="pbMRQ")
+    close = load_close_panel(codes=union, field="close", end=BACKTEST_END)
+    pe = load_close_panel(codes=union, field="peTTM", end=BACKTEST_END)
+    pb = load_close_panel(codes=union, field="pbMRQ", end=BACKTEST_END)
 
     eval_dates = [pd.Timestamp(d) for d in sorted(mdf["date"].unique())
                   if pd.Timestamp(d) in close.index]
