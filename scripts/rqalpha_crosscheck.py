@@ -25,7 +25,9 @@ N_HOLD = 10
 LOOKBACK = 20
 # This script runs in the separate `rqalpha` env, where the `hermes` package is not installed,
 # so the lake path is derived from this file's location (scripts/ -> repo root) rather than
-# imported from hermes.paths.
+# imported from hermes.paths, and the window end is a LOCAL constant that mirrors
+# hermes.data.ingest.BACKTEST_END (cannot be imported here; keep the two in sync).
+BACKTEST_END = "2025-12-31"
 MEMBERSHIP_PATH = Path(__file__).resolve().parent.parent / "data" / "parquet" / "hs300_membership.parquet"
 
 
