@@ -48,11 +48,12 @@ Battery from lake fields turn/amount, orientations fixed a-priori in the factor 
 Turnover stability carries the strongest IC ever measured on this universe -- above low_vol
 (+2.92) and value (+2.67) -- yet its top-10 basket still does not beat the deployed book
 (Calmar 0.29 vs 0.32): the same shape as lesson 2 below (a full-distribution/defensive signal
-whose strength is avoiding the churned left tail, not concentrating in a top basket). Whether a
-turnstd tilt *blends* into the deployed signal the way reversal did is a separate, pre-registered
-sweep (net AND gross, dense weights, per [multi_factor.md](multi_factor.md)'s sampling lesson);
-it has deliberately not been run ad-hoc here. Amihud illiquidity is dead inside HS300 -- every
-member is too liquid for the premium to differentiate.
+whose strength is avoiding the churned left tail, not concentrating in a top basket). The
+pre-registered blend sweep was then run and REJECTED it (see the turnover-stability section of
+[multi_factor.md](multi_factor.md)): the best point's +0.008 net-Calmar edge sits below the
+sweep's own noise floor, with no plateau, and the factor correlates 0.90 with low_vol -- the
+redundancy cluster, not a diversifier. Amihud illiquidity is dead inside HS300 -- every member is
+too liquid for the premium to differentiate.
 
 ## Lessons
 

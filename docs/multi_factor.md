@@ -115,6 +115,35 @@ factor diversification, and sector-relative selection should be re-evaluated the
 substance of the CSI500 line. The improvement to the main approach is the universe, not
 factor-stuffing within HS300.
 
+## A turnover-stability tilt does not blend in (follow-up, 2026-07)
+
+liquidity_factor_study later measured low_turnover_vol (turnstd20) at IC t=+4.26 -- the strongest
+single-factor IC on this universe -- inviting the same question reversal answered above. The
+pre-registered sweep (`scripts/turnstd_blend_study.py`: deployed [5,1] core fixed, turnstd added
+at w in {0.5, 1, 2, 3, 5}, net AND gross, cross-tier gate) rejects it:
+
+| variant (1M) | CAGR | maxDD | net Calmar | gross Calmar |
+|---|---:|---:|---:|---:|
+| val+rev 5/1 (deployed) | +10.5% | -33.0% | 0.318 | 0.337 |
+| val+rev+tstd 5/1/0.5 | +11.0% | -33.7% | 0.326 | 0.344 |
+| val+rev+tstd 5/1/1 | +9.5% | -33.4% | 0.29 | 0.30 |
+| val+rev+tstd 5/1/2 | +9.9% | -34.1% | 0.29 | 0.31 |
+| val+rev+tstd 5/1/3 | +10.5% | -34.1% | 0.31 | 0.33 |
+| val+rev+tstd 5/1/5 | +9.8% | -34.5% | 0.28 | 0.30 |
+| val+tstd 5/1 (substitute) | +10.3% | -32.7% | 0.32 | 0.33 |
+
+The w=0.5 point technically clears the literal gates (net +0.008, gross +0.007, tiers
+0.32/0.33/0.33, positive in all three regimes: +0.006/+0.012/+0.074). It is still rejected, on
+the standard this document itself established: **the sweep's own adjacent-weight scatter (0.33 ->
+0.29 -> 0.29 -> 0.31 -> 0.28) shows the measurement's noise floor is roughly +-0.03, and the
+candidate's +0.008 edge sits below it** -- an isolated point, not a plateau. The reversal tilt was
+adopted on +0.04 across a four-point plateau with the gross curve rising materially; this is
+neither. The diagnosis matrix says why: turnstd correlates 0.90 with low_vol and 0.73 with value
+-- it is a member of the redundancy cluster whose blends A2 already rejected, not a diversifier
+like reversal (-0.19). Its drawdown is also slightly worse (-33.7% vs -33.0%). The deployed book
+is unchanged; turnstd remains what factor_research.md records -- a strong defensive IC whose value
+does not concentrate in, or blend into, a top basket.
+
 ## Conclusion
 
 B succeeds on risk-adjusted return: a modest reversal tilt (value ~85% / reversal ~15%)
