@@ -102,3 +102,29 @@ def test_blend_zero_weight_factor_is_ignored():
     only_f1 = fl.blend([f1], [1.0])
     with_zero = fl.blend([f1, f2], [1.0, 0.0])               # f2 at weight 0 must not affect
     pd.testing.assert_frame_equal(with_zero, only_f1)
+
+
+def test_low_turnover_orientation_and_zero_guard():
+    # quiet name scores above churned name; turn<=0 bars are excluded, not treated as calm
+    turn = pd.DataFrame({"quiet": [1.0, 1.0, 1.0], "churn": [10.0, 12.0, 14.0],
+                         "gappy": [1.0, 0.0, 1.0]})
+    lt = fl.low_turnover(turn, window=2)
+    assert lt.iloc[-1]["quiet"] > lt.iloc[-1]["churn"]
+    assert math.isclose(lt.iloc[-1]["gappy"], -1.0)     # the 0 bar is excluded from the mean
+
+
+def test_low_turnover_vol_orientation_stable_beats_spiky():
+    turn = pd.DataFrame({"stable": [5.0, 5.0, 5.0, 5.0], "spiky": [1.0, 9.0, 1.0, 9.0]})
+    tv = fl.low_turnover_vol(turn, window=3)
+    assert tv.iloc[-1]["stable"] > tv.iloc[-1]["spiky"]  # stable attention = more attractive
+
+
+def test_amihud_illiquidity_orientation_and_zero_amount_guard():
+    # same |return| on 1/100th the traded value = 100x more illiquid = higher score
+    close = pd.DataFrame({"thin": [100.0, 101.0, 102.0], "deep": [100.0, 101.0, 102.0],
+                          "dead": [100.0, 100.0, 100.0]})
+    amount = pd.DataFrame({"thin": [1e6, 1e6, 1e6], "deep": [1e8, 1e8, 1e8],
+                           "dead": [1e6, 0.0, 1e6]})
+    am = fl.amihud_illiquidity(close, amount, window=2)
+    assert am.iloc[-1]["thin"] > am.iloc[-1]["deep"]
+    assert np.isnan(am.iloc[1]["dead"])                  # amount==0 -> NaN, no spurious inf

@@ -294,19 +294,23 @@ the effect is small, non-monotone and regime-unstable, though the magnitude is +
 
 ## CSI500-native factors (follow-up to A6): a real signal, but unharvestable long-only
 
-REPRODUCIBILITY GAP: unlike A1-A9, no `*_study.py` for this follow-up was ever committed, and the
-dataset it ran on was purged (the gated rebuild restores the universe but on a newer adjusted-price
-basis), so the figures below cannot currently be regenerated from this repo. They are recorded as
-reported; treat them as weaker evidence than the scripted studies until a script is restored and
-re-run against the rebuilt dataset.
-
 Re-tested CSI500 with small-cap-native factors (not the HS300-tuned value). A genuine small-cap
-predictor cluster exists at the IC level -- **low turnover-volatility (turnstd20: mean IC +0.084,
-t=6.15, hit 74%, positive in every 2y sub-period)**, plus low-turnover / illiquidity / low-vol. But it
-is a **left-tail short signal** (it flags names to avoid): long-only it still backtests to Calmar ~0.20
-/ −44% with 0.75 correlation to the HS300 book (no diversification). It is only harvestable in a
-long-short book -- the same securities-lending-gated constraint as A8. **Standalone long-only CSI500 stays rejected under
-any factor sophistication.**
+predictor cluster exists at the IC level -- **low turnover-volatility (turnstd20: mean IC +0.083,
+t=+6.15, hit 75%, positive in every 2y sub-period)**, plus low-turnover (t=+5.27) and Amihud
+illiquidity (t=+2.88). But it is a **left-tail short signal** (it flags names to avoid): long-only
+top-30 (price limits ON, ST filtered) it backtests to Calmar 0.15 / maxDD -50.7% with +0.63
+monthly correlation to the HS300 book (no diversification). It is only harvestable in a long-short
+book -- the same securities-lending-gated constraint as A8. **Standalone long-only CSI500 stays
+rejected under any factor sophistication.**
+
+RE-MEASURED 2026-07 (`scripts/liquidity_factor_study.py` -- this follow-up originally shipped with
+no script, and its exact dataset was purged). On the regenerated, coverage-gated dataset the
+IC-level claims reproduce essentially exactly (originally reported: IC +0.084, t=6.15, hit 74%);
+the long-only read comes out somewhat WORSE than originally recorded (Calmar 0.15 / -50.7% / corr
++0.63 vs the reported ~0.20 / -44% / 0.75 -- the original config cannot be compared line-by-line
+without its script). The verdict is unchanged and slightly strengthened. The same battery on HS300
+is in [factor_research.md](factor_research.md): turnover stability posts the strongest IC ever
+measured there (t=+4.26) but its top basket still does not beat the deployed book.
 
 ## Intraday IF (separate line): no edge, data-gated -- see [intraday.md](intraday.md)
 

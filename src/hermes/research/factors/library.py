@@ -132,6 +132,33 @@ def float_cap(amount: pd.DataFrame, turn_pct: pd.DataFrame) -> pd.DataFrame:
     return (amount / (turn_pct / 100.0)).where(turn_pct > 0)
 
 
+def low_turnover(turn_pct: pd.DataFrame, window: int = 20) -> pd.DataFrame:
+    """Negative rolling mean of the free-float turnover rate (low turnover = attractive).
+
+    A-share prior: heavily-churned names are retail speculation favourites that subsequently
+    underperform; quiet names carry a neglect/illiquidity premium. Orientation fixed a-priori.
+    Bars with turn<=0 (limit-locked / data gaps) are excluded, not treated as calm; the factor
+    needs at least half the window valid (one halted day must not NaN a 20-day factor)."""
+    return -turn_pct.where(turn_pct > 0).rolling(window, min_periods=max(1, window // 2)).mean()
+
+
+def low_turnover_vol(turn_pct: pd.DataFrame, window: int = 20) -> pd.DataFrame:
+    """Negative rolling std of the turnover rate -- the 'turnstd' signal from the CSI500-native
+    follow-up (docs/risk_control.md): names whose attention is UNSTABLE (turnover spikes) are
+    speculative episodes that revert; stable-turnover names are attractive. Orientation fixed
+    a-priori. Same turn<=0 exclusion and half-window minimum as low_turnover."""
+    return -turn_pct.where(turn_pct > 0).rolling(window, min_periods=max(2, window // 2)).std()
+
+
+def amihud_illiquidity(close: pd.DataFrame, amount: pd.DataFrame, window: int = 20) -> pd.DataFrame:
+    """Amihud (2002) illiquidity: rolling mean of |daily return| / traded value (CNY). Higher =
+    the price moves more per yuan traded = more illiquid = attractive (the illiquidity premium).
+    Orientation fixed a-priori. Rank-based use only -- the raw magnitude's scale is arbitrary.
+    Same half-window minimum as low_turnover (a halted day must not NaN the factor)."""
+    ret = close.pct_change(fill_method=None).abs()
+    return (ret / amount).where(amount > 0).rolling(window, min_periods=max(1, window // 2)).mean()
+
+
 def small_size(cap: pd.DataFrame) -> pd.DataFrame:
     """Negative log market cap (the small-size premium). Feed float_cap() (free, from the
     daily lake) -- the earlier Tushare-total_mv blocker is moot.

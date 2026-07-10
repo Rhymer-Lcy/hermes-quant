@@ -35,6 +35,25 @@ factors (momentum/reversal) into the model diluted the signal rather than improv
 | low_vol     | -0.3% / -47%  | -0.2% / -47%  |
 | momentum    | -7.0% / -77%  | -8.0% / -88%  |
 
+## Liquidity/turnover factors (the last untested family; `scripts/liquidity_factor_study.py`)
+
+Battery from lake fields turn/amount, orientations fixed a-priori in the factor library:
+
+| factor | mean IC | t-stat | hit% | top-10 long-only |
+|---|---:|---:|---:|---|
+| low_turnstd20 (stable turnover) | +0.078 | **+4.26** | 66% | +9.6% / -33.6% / Calmar 0.29 |
+| low_turn20 (low turnover) | +0.073 | +3.68 | 64% | +8.1% / -35.9% / Calmar 0.23 |
+| amihud20 (illiquidity) | -0.009 | -0.71 | 48% | (fails the IC gate) |
+
+Turnover stability carries the strongest IC ever measured on this universe -- above low_vol
+(+2.92) and value (+2.67) -- yet its top-10 basket still does not beat the deployed book
+(Calmar 0.29 vs 0.32): the same shape as lesson 2 below (a full-distribution/defensive signal
+whose strength is avoiding the churned left tail, not concentrating in a top basket). Whether a
+turnstd tilt *blends* into the deployed signal the way reversal did is a separate, pre-registered
+sweep (net AND gross, dense weights, per [multi_factor.md](multi_factor.md)'s sampling lesson);
+it has deliberately not been run ad-hoc here. Amihud illiquidity is dead inside HS300 -- every
+member is too liquid for the premium to differentiate.
+
 ## Lessons
 
 1. **The single value factor (earnings yield) is the strongest and lowest-drawdown, and
