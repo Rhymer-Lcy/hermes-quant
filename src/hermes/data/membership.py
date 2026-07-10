@@ -53,14 +53,19 @@ def _build_index_membership(query_fn, parquet_path, union_csv, label: str,
     with bss.session():
         for d in month_end_trading_dates(start, end):
             # One transient server hiccup among ~130 serial queries used to abort the whole
-            # build (an errored result set has no columns, so df["code"] raised KeyError).
-            # Retry the month a few times; if it never succeeds, fail naming the date.
+            # build (an errored result set has no columns, so df["code"] raised KeyError) -- and
+            # a server-side session drop ("10001001 用户未登录") kills every later query, so a
+            # bare retry cannot recover it: re-login first. If a month never succeeds, fail
+            # naming the date rather than building a silently incomplete history.
             for attempt in range(3):
                 rs = query_fn(date=d)
                 df = rs_to_df(rs)
                 if rs.error_code == "0" and "code" in df.columns and not df.empty:
                     break
-                time.sleep(2.0 * (attempt + 1))
+                if bss.is_session_error(f"{rs.error_code} {getattr(rs, 'error_msg', '')}"):
+                    bss.relogin()
+                else:
+                    time.sleep(2.0 * (attempt + 1))
             else:
                 raise RuntimeError(
                     f"{label} membership query failed for {d} after 3 attempts "

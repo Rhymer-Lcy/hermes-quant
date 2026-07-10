@@ -139,6 +139,37 @@ def session():
         bs.logout()
 
 
+_SESSION_ERROR_CODE = "10001001"     # "用户未登录": the server dropped the login mid-batch
+
+
+def is_session_error(msg: str) -> bool:
+    """True if an error message says the server dropped the session ("user not logged in").
+
+    BaoStock silently expires long-lived sessions: partway through a large serial pull every
+    subsequent query fails with 10001001 and, without detection, a batch runner records hundreds of
+    "errors" and reports success -- exactly how the original CSI500 dataset ended up 97% empty.
+    Callers that see this should relogin() and retry the failed item."""
+    return _SESSION_ERROR_CODE in msg or "未登录" in msg
+
+
+def relogin() -> str | None:
+    """Re-establish a dropped session in place (best-effort logout, re-pin the IP, login again).
+    Raises BaoStockUnavailable on a transport failure, RuntimeError otherwise; returns the pinned
+    IP on success, mirroring session()'s classification."""
+    try:
+        bs.logout()
+    except Exception:  # noqa: BLE001 -- the old session is already dead; logout is best-effort
+        pass
+    ip = _pin_server_ip()
+    lg = bs.login()
+    if lg.error_code != "0":
+        msg = f"BaoStock re-login failed: {lg.error_code} {lg.error_msg}"
+        if _is_network_error(lg.error_code, lg.error_msg):
+            raise BaoStockUnavailable(msg)
+        raise RuntimeError(msg)
+    return ip
+
+
 def daily_bars(code: str, start: str, end: str, adjustflag: str = "2") -> pd.DataFrame:
     """Daily bars for one symbol. Call inside `session()`. Returns a typed DataFrame.
 
@@ -190,7 +221,14 @@ def stock_industry(date: str | None = None) -> pd.DataFrame:
 
 def index_close(code: str, start: str, end: str) -> pd.Series:
     """Daily close for an index (e.g. 'sh.000300' = CSI 300). Call inside `session()`.
-    Indices have no valuation/adjustment fields, so only date+close are requested."""
+    Indices have no valuation/adjustment fields, so only date+close are requested.
+
+    TRUNCATION GUARD: a connection that dies mid-download ends the `rs.next()` stream early
+    WITHOUT setting an error code, silently returning a partial series. For a hedge/regime study a
+    truncated index shortens the evaluation window and corrupts every annualized figure (observed
+    once: an index cut short mid-2025 inflated the A8 hedged CAGRs by 1.6-2.5pp). Indices trade
+    every session, so a last bar more than ~15 calendar days before `end` (when `end` is in the
+    past) can only be truncation -- raise instead of returning it."""
     rs = bs.query_history_k_data_plus(code, "date,close", start_date=start, end_date=end,
                                       frequency="d")
     if rs.error_code != "0":
@@ -202,4 +240,10 @@ def index_close(code: str, start: str, end: str) -> pd.Series:
     if df.empty:
         return pd.Series(dtype=float)
     df["date"] = pd.to_datetime(df["date"])
+    last = df["date"].max()
+    horizon = min(pd.Timestamp(end), pd.Timestamp.now().normalize())
+    if last < horizon - pd.Timedelta(days=15):
+        raise BaoStockUnavailable(
+            f"index pull for {code} looks TRUNCATED: last bar {last.date()} vs requested end "
+            f"{end} (mid-stream connection drop). Retry the pull.")
     return pd.to_numeric(df["close"], errors="coerce").set_axis(df["date"]).rename(code)

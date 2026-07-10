@@ -48,7 +48,7 @@ def pull_universe(codes, start: str = BACKTEST_START, end: str = BACKTEST_END) -
     with bss.session():
         for i, code in enumerate(codes, 1):
             try:
-                df = bss.daily_bars(code, start, end, adjustflag="2")
+                df = _daily_bars_reloginning(code, start, end)
                 if not df.empty:
                     atomic_to_parquet(df, out / f"{code.replace('.', '_')}.parquet", index=False)
                 results.append({"code": code, "rows": len(df), "status": "ok"})
@@ -57,6 +57,23 @@ def pull_universe(codes, start: str = BACKTEST_START, end: str = BACKTEST_END) -
             if i % 25 == 0 or i == n:
                 print(f"  ...{i}/{n} pulled")
     return pd.DataFrame(results)
+
+
+def _daily_bars_reloginning(code: str, start: str, end: str, attempts: int = 3) -> pd.DataFrame:
+    """daily_bars, recovering from a server-side session drop by re-logging in and retrying.
+
+    BaoStock expires long-lived sessions partway through large serial batches; without recovery
+    every subsequent query fails with "10001001 用户未登录" and the batch runner records hundreds
+    of errors while still exiting 0 -- the failure mode that left the original CSI500 pull 97%
+    empty (28 of 886 names pulled) and silently invalidated the A6 study built on it."""
+    for attempt in range(attempts):
+        try:
+            return bss.daily_bars(code, start, end, adjustflag="2")
+        except Exception as exc:  # noqa: BLE001 -- retry only the known session-drop failure
+            if attempt + 1 >= attempts or not bss.is_session_error(str(exc)):
+                raise
+            bss.relogin()
+    raise AssertionError("unreachable")
 
 
 def _is_rebased(old_close: float, new_close: float, rtol: float = 1e-4) -> bool:
@@ -98,7 +115,7 @@ def pull_universe_incremental(codes, start: str = BACKTEST_START, end: str = BAC
             path = out / f"{code.replace('.', '_')}.parquet"
             try:
                 if not path.exists():                                       # new name -> full pull
-                    df = bss.daily_bars(code, start, end, adjustflag="2")
+                    df = _daily_bars_reloginning(code, start, end)
                     if not df.empty:
                         atomic_to_parquet(df, path, index=False)
                     results.append({"code": code, "rows": len(df), "status": "ok", "mode": "full:new"})
@@ -109,7 +126,7 @@ def pull_universe_incremental(codes, start: str = BACKTEST_START, end: str = BAC
                 if latest is not None and last >= latest:                   # already current -> skip
                     results.append({"code": code, "rows": len(existing), "status": "ok", "mode": "skip"})
                     continue
-                win = bss.daily_bars(code, last.strftime("%Y-%m-%d"), end, adjustflag="2")
+                win = _daily_bars_reloginning(code, last.strftime("%Y-%m-%d"), end)
                 if win.empty:
                     results.append({"code": code, "rows": len(existing), "status": "ok", "mode": "no-new"})
                     continue
@@ -118,7 +135,7 @@ def pull_universe_incremental(codes, start: str = BACKTEST_START, end: str = BAC
                 rebased = (len(old_o) == 0 or len(new_o) == 0
                            or _is_rebased(float(old_o.iloc[0]), float(new_o.iloc[0])))
                 if rebased:                                                 # dividend/split -> full re-pull
-                    df = bss.daily_bars(code, start, end, adjustflag="2")
+                    df = _daily_bars_reloginning(code, start, end)
                     if not df.empty:
                         atomic_to_parquet(df, path, index=False)
                     results.append({"code": code, "rows": len(df), "status": "ok", "mode": "full:rebased"})

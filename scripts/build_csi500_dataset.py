@@ -21,6 +21,23 @@ def main() -> None:
     if new:
         summary = ingest.pull_universe(new)
         ingest.write_pull_summary(summary, name="csi500")
+        n_err = int((~summary["status"].eq("ok")).sum())
+        if n_err:
+            print(f"  WARNING: {n_err}/{len(new)} names errored; first: "
+                  f"{summary.loc[~summary['status'].eq('ok'), 'status'].iloc[0]}")
+
+    # COVERAGE GATE. The original build silently produced a 97%-empty dataset (a mid-batch session
+    # drop failed 858 of 886 pulls without aborting), and the A6 study then ran on it and published
+    # a conclusion computed from garbage. A dataset build must not report a success it did not achieve.
+    on_disk = {f.stem for f in daily.glob("*.parquet")}
+    covered = sum(1 for c in union if c.replace(".", "_") in on_disk)
+    coverage = covered / len(union)
+    print(f"coverage: {covered}/{len(union)} union names with daily bars ({coverage:.1%})")
+    if coverage < 0.99:
+        raise RuntimeError(
+            f"CSI500 dataset INCOMPLETE: only {covered}/{len(union)} names have bars "
+            f"({coverage:.1%} < 99%). Re-run this script to pull the missing names; do NOT run "
+            f"csi500_universe_study.py / cadence_universe_study.py against a partial dataset.")
     print("CSI500 dataset ready.")
 
 

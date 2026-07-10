@@ -43,6 +43,14 @@ def load_universe(parquet, end=END):
     union = sorted(mdf["code"].unique())
     asof = membership_lookup(mdf)
     close = load_close_panel(codes=union, field="close", end=end)
+    # DATA-COMPLETENESS GATE: the original A6 ran on a 97%-empty CSI500 pull (an unnoticed
+    # mid-batch session-drop cascade) and published a conclusion computed from it. Refuse to
+    # study a universe whose lake is materially incomplete.
+    have = int(close.notna().any().sum())
+    if have / len(union) < 0.99:
+        raise RuntimeError(
+            f"universe data INCOMPLETE for {parquet}: {have}/{len(union)} names have bars "
+            f"({have / len(union):.1%} < 99%). Rebuild with build_csi500_dataset.py first.")
     pe = load_close_panel(codes=union, field="peTTM", end=end)
     pb = load_close_panel(codes=union, field="pbMRQ", end=end)
     pre = load_close_panel(codes=union, field="preclose", end=end)
