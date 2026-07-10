@@ -8,6 +8,7 @@ set. `query_hs300_stocks(date)` returns the constituents effective on that date.
 from __future__ import annotations
 
 import bisect
+import time
 from typing import Any
 
 import baostock as bs
@@ -51,7 +52,19 @@ def _build_index_membership(query_fn, parquet_path, union_csv, label: str,
     rows = []
     with bss.session():
         for d in month_end_trading_dates(start, end):
-            df = rs_to_df(query_fn(date=d))
+            # One transient server hiccup among ~130 serial queries used to abort the whole
+            # build (an errored result set has no columns, so df["code"] raised KeyError).
+            # Retry the month a few times; if it never succeeds, fail naming the date.
+            for attempt in range(3):
+                rs = query_fn(date=d)
+                df = rs_to_df(rs)
+                if rs.error_code == "0" and "code" in df.columns and not df.empty:
+                    break
+                time.sleep(2.0 * (attempt + 1))
+            else:
+                raise RuntimeError(
+                    f"{label} membership query failed for {d} after 3 attempts "
+                    f"(error_code={rs.error_code}, error_msg={getattr(rs, 'error_msg', '')!r})")
             rows.extend({"date": d, "code": c} for c in df["code"].tolist())
     mdf = pd.DataFrame(rows)
     mdf["date"] = pd.to_datetime(mdf["date"])
