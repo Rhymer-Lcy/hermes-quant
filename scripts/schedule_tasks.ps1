@@ -1,11 +1,16 @@
 # Manage the Hermes scheduled tasks (version-controlled definitions so they are reproducible).
-# Two weekday jobs, isolated from each other:
-#   hermes-paper     19:00  -> paper_live.ps1          (EOD paper trading; updates results/paper/)
-#   hermes-if-accum  15:40  -> accumulate_if_minute.ps1 (IF minute-bar data accumulation)
+# Three weekday jobs, isolated from each other:
+#   hermes-paper     19:00 Beijing -> paper_live.ps1           (EOD equity paper trading)
+#   hermes-if-accum  15:40 Beijing -> accumulate_if_minute.ps1 (IF minute-bar accumulation)
+#   hermes-cb-paper  19:40 Beijing -> cb_paper_live.ps1        (CB double-low forward record)
 # hermes-paper runs in the evening because BaoStock posts the day's EOD daily bars ~2-3 h after
 # close; an earlier run would either miss today's data or (mid-publication) mis-liquidate the
 # not-yet-posted names. hermes-if-accum stays at 15:40 (Sina minute bars are available at close).
-# Both use StartWhenAvailable: a run missed because the PC was off/asleep/logged-out fires on the
+# hermes-cb-paper follows at 19:40 (Eastmoney/Sina EOD posted by then; staggered off hermes-paper).
+# All times are BEIJING wall-clock: each trigger's StartBoundary is an offset-qualified +08:00
+# instant (the plutus schedule_tasks.ps1 fix) -- Windows preserves it as an absolute instant, so
+# the schedule survives a machine-timezone change, unlike a floating local `-At hh:mm`.
+# All use StartWhenAvailable: a run missed because the PC was off/asleep/logged-out fires on the
 # next boot/wake (cannot run while powered off; one catch-up, which suffices given recompute-from-seed).
 # hermes-paper works with the corporate VPN on: paper_live.ps1 resolves public-api.baostock.com via a
 # public DNS server and pins the IP (the VPN breaks the default resolver but not the route), and it
@@ -49,9 +54,12 @@ function Resolve-HermesPython {
     "). Activate the hermes env (conda activate hermes) or set HERMES_PYTHON to its python.exe, then re-run register.")
 }
 
+# anchor = an offset-qualified +08:00 instant on a past MONDAY, so the weekly Mon-Fri trigger
+# fires at that Beijing wall-clock time regardless of the machine's timezone or DST.
 $tasks = @{
-  'hermes-paper'    = @{ file = Join-Path $PSScriptRoot 'paper_live.ps1';          time = '19:00'; desc = 'Hermes daily EOD paper trading (weekdays 19:00, after BaoStock posts EOD)' }
-  'hermes-if-accum' = @{ file = Join-Path $PSScriptRoot 'accumulate_if_minute.ps1'; time = '15:40'; desc = 'Hermes daily IF minute-bar accumulator (weekdays 15:40)' }
+  'hermes-paper'    = @{ file = Join-Path $PSScriptRoot 'paper_live.ps1';           anchor = '2025-01-06T19:00:00+08:00'; desc = 'Hermes daily EOD paper trading (weekdays 19:00 Beijing, after BaoStock posts EOD)' }
+  'hermes-if-accum' = @{ file = Join-Path $PSScriptRoot 'accumulate_if_minute.ps1'; anchor = '2025-01-06T15:40:00+08:00'; desc = 'Hermes daily IF minute-bar accumulator (weekdays 15:40 Beijing)' }
+  'hermes-cb-paper' = @{ file = Join-Path $PSScriptRoot 'cb_paper_live.ps1';        anchor = '2025-01-06T19:40:00+08:00'; desc = 'Hermes daily CB double-low forward record (weekdays 19:40 Beijing)' }
 }
 switch ($action) {
   'register' {
@@ -62,14 +70,16 @@ switch ($action) {
     foreach ($name in $tasks.Keys) {
       $t = $tasks[$name]
       $a = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$($t.file)`""
-      $trig = New-ScheduledTaskTrigger -Weekly -DaysOfWeek Monday, Tuesday, Wednesday, Thursday, Friday -At $t.time
+      $trig = New-ScheduledTaskTrigger -Weekly -DaysOfWeek Monday, Tuesday, Wednesday, Thursday, Friday -At '12:00'
+      $trig.StartBoundary = $t.anchor        # re-anchor to Beijing wall-clock (absolute instant)
       $p = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive
       # StartWhenAvailable: if the PC was off/asleep/logged-out at the scheduled time, run the missed
       # job once on the next boot/wake (one catch-up, not one-per-missed-day -- which suffices because
       # the paper ledger is recompute-from-seed, so a single late run reconstructs every skipped bar).
       $s = New-ScheduledTaskSettingsSet -StartWhenAvailable
       Register-ScheduledTask -TaskName $name -Action $a -Trigger $trig -Principal $p -Settings $s -Description $t.desc -Force | Out-Null
-      "registered $name @ $($t.time) weekdays (LogonType Interactive; StartWhenAvailable = catch up a missed run on next boot/wake)"
+      $next = (Get-ScheduledTaskInfo -TaskName $name).NextRunTime
+      "registered $name (anchor $($t.anchor); weekdays; next run local = $next)"
     }
   }
   'disable' { $tasks.Keys | ForEach-Object { Disable-ScheduledTask -TaskName $_ | Out-Null; "disabled (paused) $_" } }
