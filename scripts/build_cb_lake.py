@@ -12,6 +12,8 @@ window -- a matured-in-2012 miss does not matter to a 2018-onward study.
 """
 import sys
 
+import pandas as pd
+
 from hermes.cb import data as cb
 
 WINDOW_START = "2018-01-01"   # docs/cb_lake.md: the pre-registered study window
@@ -39,13 +41,14 @@ def main(retry_misses: bool = False) -> int:
             & {p.stem for p in cb.PREMIUM_DIR.glob("*.parquet")})
 
     # A CB lives at most 6 years, so anything listed >= window start - 6y COULD reach the
-    # window; bonds whose (served) bars end before the window are known dead and drop out.
-    # A candidate with NO bars at all stays counted -- conservative, it may have matured
-    # earlier, but "unresolved" must not silently read as "covered".
+    # window (bonds whose listing date is still in the future have not traded and cannot
+    # be covered); bonds whose (served) bars end before the window are known dead and drop
+    # out. A candidate with NO bars at all stays counted -- conservative, it may have
+    # matured earlier, but "unresolved" must not silently read as "covered".
     bars = cb.load_bars()
     last = bars.groupby("code")["date"].max()
     horizon = str(int(WINDOW_START[:4]) - 6) + WINDOW_START[4:]
-    candidates = set(uni.loc[uni["listing_date"] >= horizon, "code"])
+    candidates = set(uni.loc[uni["listing_date"].between(horizon, pd.Timestamp.now()), "code"])
     known_dead = set(last[last < WINDOW_START].index)
     in_window = candidates - known_dead
     missing_in_window = sorted(in_window - both)
