@@ -1,4 +1,4 @@
-"""Idempotent performance ledger — pattern borrowed from odds-pipeline build_review.
+"""Idempotent performance ledger.
 
 Principle: the running ledger is ALWAYS recomputed from an immutable seed plus
 every folded day, so re-running a day is idempotent and the equity curve / trade

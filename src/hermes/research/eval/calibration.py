@@ -1,4 +1,4 @@
-"""Probability-calibration metrics — ported/generalized from odds-pipeline.
+"""Probability-calibration metrics.
 
 Use these to check whether a signal's predicted probabilities are *trustworthy*
 before sizing any position on them. A model that says "70% up" should be right

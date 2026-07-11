@@ -106,3 +106,11 @@ external/          upstream checkouts (vnpy, RQAlpha), pip install -e — gitign
 docs/              architecture & curated research findings (tracked)
 notebooks/         research scratch
 ```
+
+## Disclaimer
+
+This is a personal research project. **Nothing here is investment advice.** The deployed
+configuration is a research hypothesis under a forward paper-trading test, not a recommendation;
+its backtest results do not predict future returns, and no live capital is deployed. All market
+data is pulled at runtime from free public sources (BaoStock) and is **not included in this
+repository**. The code is provided as-is, without warranty of any kind.

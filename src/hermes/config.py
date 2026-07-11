@@ -1,7 +1,6 @@
 """Secret/token loading: environment variable first, then .env.local (never committed).
 
-Pattern borrowed from odds-pipeline (config.py). Keeps tokens out of source code
-and out of version control.
+Keeps tokens out of source code and out of version control.
 """
 from __future__ import annotations
 

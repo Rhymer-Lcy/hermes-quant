@@ -64,7 +64,7 @@ strongest pairing, though neither is usable as-is:
 - Use the broker-routed QMT/Ptrade path; treat easytrader (GUI automation) as a disposable
   experiment, not infrastructure.
 
-## Borrowed from odds-pipeline
+## Design lineage (patterns carried over from an earlier private forecasting project)
 
 - `paths.py` (single source of truth for directories) and `config.py` (secrets via
   env → `.env.local`).
@@ -73,5 +73,5 @@ strongest pairing, though neither is usable as-is:
 - Model-vs-market divergence framing: alpha matters only where the model genuinely differs
   from what is priced.
 - Idempotent ledger recomputed from a seed plus folded days → `live/ledger.py`.
-- The governing principle from its README: an efficient market offers no systematic edge
-  over the consensus; value is calibration, uncertainty identification, and sizing.
+- The governing principle: an efficient market offers no systematic edge over the
+  consensus; value is calibration, uncertainty identification, and sizing.

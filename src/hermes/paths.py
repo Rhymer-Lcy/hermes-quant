@@ -1,7 +1,6 @@
 """Single source of truth for on-disk locations. Import these — never hardcode dirs.
 
-Pattern borrowed from odds-pipeline (paths.py): centralizing paths keeps scripts
-portable and makes the data layout self-documenting.
+Centralizing paths keeps scripts portable and makes the data layout self-documenting.
 """
 from __future__ import annotations
 
