@@ -52,7 +52,64 @@ costs, on a survivorship-free universe? Frozen design, no tuning after results:
   C2 close vs Sina close, and C2's implied conversion price vs C1's revision log, and record
   the mismatch rate before the study runs.
 
-## Verdict
+## Phase-0 verdict
 
-GO. Phase 1 (not started): build the lake -- universe join, daily bars, premium series, the
-two cross-checks -- then run the pre-registered study exactly as frozen above.
+GO -- and phase 1 was built and run the same day (below): the lake (`src/hermes/cb/data.py`,
+`scripts/build_cb_lake.py`), the accounting engine (`src/hermes/cb/backtest.py`), the two
+cross-checks (`src/hermes/cb/checks.py`), then the study exactly as frozen
+(`scripts/cb_double_low_study.py`). Implementation choices the freeze left open were fixed
+before any return was computed, in the study script's header: the rolling turnover median
+needs >=10 traded days in its 20-day window, the floor percentile is taken per exchange,
+score ties break by code order, and execution is at the day-after-signal close (the
+index_effect_study convention -- the freeze said "rebalance at close" without pinning the
+observation/execution lag, so the retail-replicable reading applies).
+
+## Phase 1: the lake as built (2026-07-11)
+
+1020 listed bonds (40xxxx delisted-segment re-codes dropped); bars and premium series both
+served for 1005; the 15 misses are bonds the sources do not serve, ALL outside the study
+window -- in-window coverage is 943/943 (one "miss", 127114, simply lists on 2026-07-14 and
+has not traded yet). Cross-checks, run before any strategy return existed:
+
+- close agreement (Sina bars vs Eastmoney value-analysis): 750,121 joined rows,
+  0.0085% disagree beyond 0.5%, worst 2.97% -- two independent upstreams, same tape;
+- revision agreement (EM conversion-value jumps vs the JSL log): 122-bond sample, 43 with
+  a served log, 68 logged revisions of which 62 resolvable against the series -- 100%
+  matched. Sampled bonds with no served log are excluded from the denominator ("never
+  revised" and "not served" are indistinguishable), as pre-committed;
+- turnover floors (p10 of the 20-day median of close x volume): SH 5.1e6, SZ 4.9e6 -- the
+  two markets agree in magnitude, so the per-exchange split turned out precautionary;
+- eligible bonds per rebalance: min 18 (early 2018), median 328, max 517, 103 rebalances.
+
+## Phase 1: the pre-registered result (frozen design, run once, 2018-01 -> 2026-07)
+
+| run | net total | CAGR | maxDD | stress net 2022-08->2024-12 | one-way turnover |
+|---|---:|---:|---:|---:|---:|
+| top-20 | **+167.3%** | +12.4% | −26.1% | **+16.7%** | 42.7%/mo |
+| top-20, 2x costs | +155.9% | +11.8% | −26.3% | +15.5% | 42.7%/mo |
+| top-20, defaults marked to 0 | +164.0% | +12.2% | −26.1% | +15.2% | 42.7%/mo |
+| top-10 (small capital) | +158.3% | +11.9% | −33.4% | +20.8% | 50.6%/mo |
+| equal-weight universe | +116.6% | +9.6% | −23.4% | −8.4% | -- |
+
+All three pre-registered criteria PASS: net above the equal-weight universe; stress
+sub-window net positive (+16.7% against the universe's −8.4%); max drawdown within 5 pp of
+the universe (−26.1% vs −23.4%). **Verdict: double-low SURVIVED the 2022-08 trading rules
+and the 2023 credit events, net, survivorship-free.** Robustness margins are wide: doubling
+costs takes 11 pp off 167 pp, and marking both defaults to zero takes 3 pp.
+
+What the survival is made of -- and what it does not establish:
+
+- the edge is EPISODIC: 2019 (+60% vs +32%) and 2024 (+26% vs +2%), the two post-crash
+  low-price recovery years, supply most of it; the strategy LAGS the universe in 2021,
+  2023 and 2025. Whoever holds this must sit through multi-year stretches of losing to
+  the benchmark;
+- the drawdown trough is 2021-02-08 -- the post-Yongmei low-price CB crash -- and the
+  universe's is 2024-08-22 (that year's credit scare): the curve carries both documented
+  panics rather than sidestepping them;
+- biases carried from phase 0: coupon cash is never credited (understates returns a
+  little), forced calls exit at the last close (the notice-period crash is included),
+  post-2022 limit-locked closes are still treated as fillable (not modeled);
+- survival of a pre-registered backtest is NOT deployable alpha. The whole window is
+  still history and the edge is regime-concentrated. Deployment would require its own
+  forward paper record (the docs/paper_trading.md machinery), which this study does not
+  start.
