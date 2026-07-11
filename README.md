@@ -96,11 +96,12 @@ src/hermes/        the engine — importable package (src-layout); no trading-fr
     eval/, model/  single-factor IC + calibration; walk-forward LightGBM combiner
   live/            EOD paper trading: strategy spec, data feed, idempotent ledger
   intraday/        separate intraday/futures research line (AKShare minute bars)
-  cb/              separate convertible-bond line: free-source lake, double-low engine, cross-checks
+  cb/              separate convertible-bond line: free-source lake, double-low engine, cross-checks,
+                   and its own forward paper record (docs/cb_lake.md)
   execution/       vnpy live-gateway adapters — deferred stub, unused
 scripts/           *_study.py = one research experiment, each written up in docs/ (risk_control A1–A9, no A5; multi_factor, factor_research, engine_validation, oos_decay, index_rotation, index_effect, liquidity_factor -> factor_research + risk_control; cb_double_low -> cb_lake); else operational drivers (paper_live, build_*, ingest_union)
   probes/          early one-off probes, superseded (kept for provenance)
-tests/             pytest suite (112 tests): engine invariants, no-look-ahead, parity gates
+tests/             pytest suite (117 tests): engine invariants, no-look-ahead, parity gates
 data/              local data lake — INPUTS (gitignored)
 results/           generated OUTPUTS: signals, backtests, figures, paper ledgers (gitignored)
 external/          upstream checkouts (vnpy, RQAlpha), pip install -e — gitignored, unmodified

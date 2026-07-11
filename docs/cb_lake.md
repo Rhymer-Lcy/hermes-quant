@@ -111,5 +111,32 @@ What the survival is made of -- and what it does not establish:
   post-2022 limit-locked closes are still treated as fillable (not modeled);
 - survival of a pre-registered backtest is NOT deployable alpha. The whole window is
   still history and the edge is regime-concentrated. Deployment would require its own
-  forward paper record (the docs/paper_trading.md machinery), which this study does not
-  start.
+  forward paper record -- started below.
+
+## Forward paper record (inception 2026-07-10)
+
+The stage the equity strategy already runs (docs/paper_trading.md), applied to this line:
+an EOD scheduled task (`hermes-cb-paper`, weekdays 19:40 Beijing, Beijing-anchored
+trigger) refreshes the lake incrementally (bonds with a bar in the last 45 days plus new
+listings), then recomputes the record from inception with the SAME signal code
+(`cb/signals.py`) and the SAME engine (`cb/backtest.py`) the study ran -- no re-implementation,
+no train/serve drift. Reports land under results/paper/ (cb_curve.parquet, cb_report.json);
+driver: `python scripts/cb_paper_live.py`.
+
+Frozen at inception, before any forward bar existed (`cb/paper.py`):
+
+- inception 2026-07-10, the last close before the first unknown forward day; the seed
+  enters the then-current top-20 at the NEXT trading day's close;
+- signals at every later month-end close, execution at the next trading day's close; an
+  in-progress month's provisional "month-end" has no next bar yet, so the engine waits
+  until the true month-end is confirmed by construction;
+- top-20 equal weight, 0.05% per side; turnover floors frozen at the study's calibration
+  (SH 5,109,363 / SZ 4,867,041) -- forward eligibility must not recalibrate itself;
+- a bond that stops trading exits at its last close (the study's primary mark).
+
+Reading the record honestly: the study's edge is EPISODIC (concentrated in post-crash
+recovery years), so multi-month stretches of losing to the equal-weight universe are the
+expected path, not a failure signal; judge at 12 months minimum. Replicating the book
+needs roughly 30k CNY (20 names x one 10-bond lot at typical prices, with slack). The
+data chain is scrapers (Eastmoney/Sina): a failed evening self-heals by retry and by the
+next run's recompute-from-inception.
