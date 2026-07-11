@@ -16,6 +16,7 @@ import numpy as np
 import pandas as pd
 
 from hermes.cb import data as cb
+from hermes.cb import signals as sig
 from hermes.cb.backtest import double_low_backtest
 from hermes.cb.checks import close_mismatch, revision_jump_matched
 from hermes.paths import BACKTESTS_DIR
@@ -25,16 +26,10 @@ STRESS = ("2022-08-01", "2024-12-31")   # rule change + credit events sub-window
 N_HOLD = 20
 N_HOLD_SMALL = 10
 COST_PER_SIDE = 0.0005                  # 0.10% round trip; sensitivity at 0.20%
-MIN_HISTORY_DAYS = 60
 FLOOR_PERCENTILE = 10
 REVISION_SAMPLE = 120
 SEED = 20260711
 DEFAULTED = frozenset({"128100", "123015"})   # Soute, Landun: the 2023 credit delistings
-
-
-def month_end_signals(calendar: pd.DatetimeIndex) -> pd.DatetimeIndex:
-    ends = pd.Series(calendar, index=calendar).groupby(calendar.to_period("M")).max()
-    return pd.DatetimeIndex(ends[ends >= WINDOW_START])
 
 
 def net(equity: pd.Series, start: str, end: str) -> float:
@@ -80,19 +75,14 @@ def main() -> None:
           f"{matched / resolved:.1%}" if resolved else "revision cross-check: none resolved")
 
     # --- panels and eligibility (floor fixed before any return is computed) ------------
-    close = bars.pivot(index="date", columns="code", values="close").sort_index()
-    volume = bars.pivot(index="date", columns="code", values="volume").sort_index()
-    em_close = prem.pivot(index="date", columns="code", values="close").reindex(close.index)
-    em_premium = (prem.pivot(index="date", columns="code", values="conv_premium")
-                  .reindex(close.index))
+    p = sig.panels(bars, prem)
+    close = p["close"]
     calendar = close.index
-    signals = month_end_signals(calendar)
+    signals = sig.month_end_signals(calendar, WINDOW_START)
 
-    history_ok = close.notna().cumsum().shift(1) >= MIN_HISTORY_DAYS
-    turnover20 = (close * volume).rolling(20, min_periods=10).median()
-    score_all = em_close + em_premium
+    base, score_all = sig.base_and_score(close, p["em_close"], p["em_premium"])
+    turnover20 = sig.turnover_metric(close, p["volume"])
 
-    base = close.notna() & history_ok & score_all.notna()
     pool = turnover20[base].loc[signals]
     floors = {}
     for tag, prefix in [("SH", "11"), ("SZ", "12")]:
@@ -101,8 +91,7 @@ def main() -> None:
         floors[prefix] = float(np.percentile(vals, FLOOR_PERCENTILE))
         print(f"turnover floor {tag}: p{FLOOR_PERCENTILE} = {floors[prefix]:,.0f} "
               f"(median {vals.median():,.0f}, {len(vals)} bond-months)")
-    floor_row = pd.Series({c: floors[c[:2]] for c in close.columns})
-    eligible = base & turnover20.ge(floor_row, axis=1)
+    eligible = sig.apply_floor(base, turnover20, floors)
 
     score = score_all.where(eligible).loc[signals].dropna(how="all")
     n_elig = score.notna().sum(axis=1)
