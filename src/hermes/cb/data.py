@@ -137,12 +137,14 @@ def _pull_revisions(code: str) -> pd.DataFrame:
 
 def _build_per_bond(codes: Iterable[str], out_dir: Path,
                     pull: Callable[[str], pd.DataFrame], what: str,
-                    max_workers: int = _MAX_WORKERS) -> dict[str, str]:
+                    max_workers: int = _MAX_WORKERS, force: bool = False) -> dict[str, str]:
     """Pull `what` for every code into out_dir/<code>.parquet, skipping codes already
     resolved either way (resume): a served bond has a parquet, a miss has a <code>.miss
     marker holding the error, so re-runs never re-burn timeout waits on dead codes.
     Delete the .miss files (scripts/build_cb_lake.py --retry-misses) to try them again.
-    Returns {code: error} for THIS run's misses; an empty frame counts as a miss.
+    `force=True` re-pulls every given code regardless (atomic overwrite; a success clears
+    a stale .miss) -- the nightly refresh path. Returns {code: error} for THIS run's
+    misses; an empty frame counts as a miss.
 
     Pulls run on a small thread pool (endpoint latency dominates at 2-4 s per call);
     workers write distinct files, atomically, so a kill mid-run loses nothing."""
@@ -153,6 +155,7 @@ def _build_per_bond(codes: Iterable[str], out_dir: Path,
             if df.empty:
                 raise ValueError("empty frame")
             atomic_to_parquet(df, out_dir / f"{code}.parquet", index=False)
+            (out_dir / f"{code}.miss").unlink(missing_ok=True)
             return code, None
         except Exception as exc:
             err = f"{type(exc).__name__}: {exc}"
@@ -162,8 +165,8 @@ def _build_per_bond(codes: Iterable[str], out_dir: Path,
             time.sleep(_SLEEP_SEC)
 
     out_dir.mkdir(parents=True, exist_ok=True)
-    todo = [c for c in codes if not (out_dir / f"{c}.parquet").exists()
-            and not (out_dir / f"{c}.miss").exists()]
+    todo = list(codes) if force else [c for c in codes if not (out_dir / f"{c}.parquet").exists()
+                                      and not (out_dir / f"{c}.miss").exists()]
     failures: dict[str, str] = {}
     with ThreadPoolExecutor(max_workers=max_workers) as pool_:
         for i, (code, err) in enumerate(pool_.map(pull_one, todo), 1):
@@ -189,6 +192,30 @@ def build_revisions(codes: Iterable[str]) -> dict[str, str]:
     worker: JSL is a small site, and a rate-limit block would silently shrink that
     denominator."""
     return _build_per_bond(codes, REVISIONS_DIR, _pull_revisions, "revisions", max_workers=1)
+
+
+def refresh_recent(max_age_days: int = 45) -> dict:
+    """Nightly incremental refresh for the forward paper record: re-pull the universe
+    listing, then bars and premium for every bond that could still be trading -- last
+    served bar within `max_age_days`, or listed (per the listing table) but not served
+    yet. Whole-life re-pulls with atomic overwrite (the sources send the full series
+    anyway); long-dead bonds are never touched again. Returns
+    {'attempted': N, 'bars': misses, 'premium': misses}."""
+    uni = build_universe()
+    listed = uni.loc[uni["listing_date"] <= pd.Timestamp.now(), "code"]
+    cutoff = pd.Timestamp.now() - pd.Timedelta(days=max_age_days)
+    todo = []
+    for code in listed:
+        f = BARS_DIR / f"{code}.parquet"
+        if not f.exists():
+            todo.append(code)          # never served: a fresh listing may have appeared
+        elif pd.read_parquet(f, columns=["date"])["date"].max() >= cutoff:
+            todo.append(code)
+    return {
+        "attempted": len(todo),
+        "bars": _build_per_bond(todo, BARS_DIR, _pull_bars, "bars", force=True),
+        "premium": _build_per_bond(todo, PREMIUM_DIR, _pull_premium, "premium", force=True),
+    }
 
 
 def load_universe() -> pd.DataFrame:
