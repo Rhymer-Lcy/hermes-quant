@@ -1,4 +1,4 @@
-# Unattended daily IF minute-bar accumulator wrapper for Windows Task Scheduler.
+# Unattended daily index-futures minute-bar accumulator wrapper for Windows Task Scheduler.
 # Tiny + isolated from the paper job (its failure must never touch the paper record). Logs to a
 # timestamped file and propagates the exit code. Register weekdays after futures close (~15:40):
 #   schtasks /Create /SC WEEKLY /D MON,TUE,WED,THU,FRI /ST 15:40 /TN hermes-if-accum `

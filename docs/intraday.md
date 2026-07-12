@@ -33,5 +33,8 @@ the spurious Sharpe ~7), with a built-in robustness battery (execution-delay tes
 check, deflated-Sharpe / reality-check across the whole sweep) that refuses a verdict below a
 configured data-span minimum. Engine and data depth precede signals; the signals are not the deliverable.
 
-Status: PARKED. Intraday IF research is not fruitful now and is data-gated for years. Resume only if
-the data-accumulation clock is started and intraday stays in scope.
+Status: PARKED, with the data clock RUNNING. The daily accumulator (`scripts/accumulate_if_minute.py`,
+task `hermes-if-accum`) has built the minute lake forward since 2026-06-23 for IF0, extended
+2026-07-11 to IC0/IH0/IM0 (CSI 500 / SSE 50 / CSI 1000 main continuous) -- IC and IM are the
+hedge legs any future mid/small-cap line would need, and IM's post-2022 history is the scarcest.
+Research stays parked until the data-span gate above is met.
