@@ -31,7 +31,8 @@ def test_walk_forward_predict_never_predicts_before_min_train():
     rng = np.random.default_rng(1)
     close = (_panel(dates, codes, rng).cumsum() + 50.0)
     factors = {"mom": _panel(dates, codes, rng), "vol": _panel(dates, codes, rng)}
-    asof = lambda _t: set(codes)
+    def asof(_t):
+        return set(codes)
 
     data, cols = wf.build_dataset(factors, close, dates, members_asof=asof)
     signal = wf.walk_forward_predict(data, cols, min_train=10, window=10)

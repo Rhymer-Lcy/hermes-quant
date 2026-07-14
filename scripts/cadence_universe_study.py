@@ -40,7 +40,8 @@ def cal(r):
 
 def main() -> None:
     # ---- PART 1: cadence on HS300 (deployed value+rev) ----
-    hs = pd.read_parquet(MEMBERSHIP_PARQUET); hs_union = sorted(hs["code"].unique())
+    hs = pd.read_parquet(MEMBERSHIP_PARQUET)
+    hs_union = sorted(hs["code"].unique())
     hs_asof = membership_lookup(hs)
     close = load_close_panel(codes=hs_union, field="close", end=END)
     pe = load_close_panel(codes=hs_union, field="peTTM", end=END)
@@ -74,7 +75,9 @@ def main() -> None:
     cpre = load_close_panel(codes=comb_union, field="preclose", end=END)
     cst = load_close_panel(codes=comb_union, field="isST", end=END)
     lb = limit_flags(cclose, cpre)
-    not_st = ~(cst == True)
+    # .eq(True), not ~cst: the flag panel carries NaN where a name has no bar, and eq() maps those
+    # to False (= not ST), which a bitwise ~ on a float panel cannot do.
+    not_st = ~cst.eq(True)
     with bss.session():
         ind = bss.stock_industry()
     code2ind = dict(zip(ind["code"], ind["industry"].replace("", np.nan)))
@@ -86,7 +89,8 @@ def main() -> None:
     def hhi(signal, asof, n):
         hh = []
         for d in [x for x in pd.to_datetime(sorted(comb["date"].unique())) if x in cclose.index]:
-            row = signal.loc[d].dropna(); row = row[row.index.isin(asof(d))]
+            row = signal.loc[d].dropna()
+            row = row[row.index.isin(asof(d))]
             top = row.sort_values(ascending=False).head(n).index
             if len(top):
                 cnt = Counter(code2ind.get(c, "<none>") for c in top)

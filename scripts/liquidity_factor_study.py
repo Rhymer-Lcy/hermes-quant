@@ -29,7 +29,6 @@ from hermes.data.ingest import BACKTEST_END
 from hermes.data.lake import load_close_panel
 from hermes.data.membership import (CSI500_MEMBERSHIP_PARQUET, MEMBERSHIP_PARQUET,
                                     membership_lookup)
-from hermes.data.sources import baostock_source as bss
 from hermes.live.strategy import deployed_signal
 from hermes.paths import BACKTESTS_DIR
 from hermes.research.backtest.limits import limit_flags
@@ -101,7 +100,9 @@ def main() -> None:
 
     # ---- CSI500 (native-factors re-verification) --------------------------------------
     _, cs_asof, cs, cs_eval = load(CSI500_MEMBERSHIP_PARQUET)
-    not_st = ~(cs["isST"] == True)                     # ST filtered, as in the A6 study
+    # .eq(True), not ~cs["isST"]: the flag panel carries NaN where a name has no bar, and eq()
+    # maps those to False (= not ST), which a bitwise ~ on a float panel cannot do.
+    not_st = ~cs["isST"].eq(True)                      # ST filtered, as in the A6 study
     cs_factors = {k: fl.restrict_to_universe(v.where(not_st), cs_asof)
                   for k, v in battery(cs).items()}
     cs_ic = ic_table(cs_factors, cs["close"], cs_eval, cs_asof, "CSI500 (ST filtered)")

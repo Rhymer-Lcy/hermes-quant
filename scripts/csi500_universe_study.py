@@ -67,11 +67,17 @@ def main() -> None:
     _, _, hs_asof, hs_close, hs_pe, _, _, _, _ = load_universe(MEMBERSHIP_PARQUET)
     _, c_union, c_asof, close, pe, pb, pre, st, evald = load_universe(CSI500_MEMBERSHIP_PARQUET)
 
-    not_st = ~(st == True)                                  # ST -> excluded from selection
+    # .eq(True), not ~st: the flag panel carries NaN where a name has no bar, and eq() maps those
+    # to False (= not ST), which a bitwise ~ on a float panel cannot do.
+    not_st = ~st.eq(True)                                   # ST -> excluded from selection
+
     def R(x):                                               # restrict-to-PIT + drop ST
         return fl.restrict_to_universe(x.where(not_st), c_asof)
-    ep = R(fl.earnings_yield(pe)); q = R(fl.roe(pe, pb))
-    rev = R(-fl.trailing_return(close, 20)); mom = R(fl.momentum(close, 120, 20))
+
+    ep = R(fl.earnings_yield(pe))
+    q = R(fl.roe(pe, pb))
+    rev = R(-fl.trailing_return(close, 20))
+    mom = R(fl.momentum(close, 120, 20))
     lowvol = R(fl.low_vol(close, 120))
     lb = limit_flags(close, pre)                            # price-limit no-fill panel (CSI500)
 
@@ -84,7 +90,8 @@ def main() -> None:
         for d in evald:
             if d not in sig.index:
                 continue
-            row = sig.loc[d].dropna(); row = row[row.index.isin(asof(d))]
+            row = sig.loc[d].dropna()
+            row = row[row.index.isin(asof(d))]
             top = row.sort_values(ascending=False).head(n).index
             if len(top):
                 cnt = Counter(code2ind.get(c, "<none>") for c in top)

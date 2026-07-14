@@ -21,7 +21,6 @@ its headline bump is claimed to be a single 2015 event rather than a repeatable 
 """
 from __future__ import annotations
 
-import numpy as np
 import pandas as pd
 
 from hermes.data.ingest import BACKTEST_END

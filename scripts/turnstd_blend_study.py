@@ -86,7 +86,7 @@ def main() -> None:
         return sig
 
     line("value (base)", ep)
-    deployed = line("val+rev 5/1 (deployed)", fl.blend([ep, rev1], [5, 1]))
+    line("val+rev 5/1 (deployed)", fl.blend([ep, rev1], [5, 1]))
     for w in WEIGHTS:
         line(f"val+rev+tstd 5/1/{w:g}", fl.blend([ep, rev1, turnstd], [5, 1, w]))
     line("val+tstd 5/1 (substitute)", fl.blend([ep, turnstd], [5, 1]))

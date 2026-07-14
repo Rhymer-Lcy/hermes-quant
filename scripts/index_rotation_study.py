@@ -61,7 +61,6 @@ def rotate(closes: pd.DataFrame, window: int, skip: int) -> tuple[pd.Series, pd.
     dates = closes.index
     me = month_end_positions(dates)
     held = pd.Series(index=dates, dtype=object)
-    current = None
     for i, pos in enumerate(me):
         row = mom.iloc[pos].dropna()
         if row.empty:
@@ -70,7 +69,6 @@ def rotate(closes: pd.DataFrame, window: int, skip: int) -> tuple[pd.Series, pd.
         nxt = pos + 2                        # signal at close(pos) -> executed close(pos+1):
         stop = me[i + 1] + 2 if i + 1 < len(me) else len(dates)   # returns accrue from pos+2
         held.iloc[nxt:stop] = pick
-        current = pick
     strat = pd.Series(0.0, index=dates)
     for d in range(len(dates)):
         a = held.iloc[d]
