@@ -26,7 +26,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest"]
+dev = ["pytest", "ruff"]
 # vnpy etc. are installed editable from ./external (pip install -e external/vnpy),
 # kept out of `dependencies` so secondary-dev edits take effect.
 notebooks = ["jupyterlab"]
