@@ -138,6 +138,12 @@ cross-sector breadth. Built survivorship-free (1326-name PIT union, free via Bao
 `query_zz500_stocks`), traded with **price-limit no-fill ON and ST names filtered** (the rigorous
 small-cap treatment), same 2015-2025 window as HS300 (`scripts/csi500_universe_study.py`):
 
+> Note (2026-07-15): the limit detection used here (and in A7) applied today's board widths to
+> the whole history; ChiNext was ±10% before the 2020-08-24 reform, so pre-2020 ChiNext locks
+> were under-detected and the published fills are slightly optimistic. The rule is now
+> date-aware (`research.backtest.limits`); direction of the correction: A6/A7's CSI500 numbers
+> would only get (marginally) worse, so no verdict here can flip.
+
 | variant (1M, 2015-2025)        | CAGR  | maxDD  | net Calmar | sector HHI |
 |--------------------------------|------:|-------:|-----------:|-----------:|
 | HS300 value+rev 5/1 (deployed) | +10.5%| -33.0% | **0.32**   | 0.58 |
