@@ -77,7 +77,7 @@ python scripts/probes/smoke_baostock.py    # verify the data link
 |---|---|---|
 | **BaoStock** | none (anonymous) | the deployed pipeline's sole source: historical daily backbone (incl. delisted names) **and** point-in-time HS300/CSI500 membership |
 | **Tushare Pro** | free token (optional extra, not installed by default) | **unused** — adapter kept only as a reference for a possible paid tier; free-float cap now reconstructs from the BaoStock lake |
-| **AKShare** | none (scraper) | minute bars for the separate intraday futures line (`intraday/`) and the convertible-bond lake (`cb/`, see docs/cb_lake.md) — fragile, never the equity backbone. Paper trading does **not** use it; it refreshes from BaoStock EOD |
+| **AKShare** | none (scraper) | minute bars for the separate intraday futures line (`intraday/`), the convertible-bond lake (`cb/`, see docs/cb_lake.md), and the SSE margin-balance series (docs/ruleset_studies.md #6) — fragile, never the equity backbone. Paper trading does **not** use it; it refreshes from BaoStock EOD |
 
 Backtest window: **2015-01-01 → present** (multi-regime), with the most recent ~1–2 years
 held out for walk-forward validation. **Delisted stocks are included** to avoid
@@ -99,9 +99,9 @@ src/hermes/        the engine — importable package (src-layout); no trading-fr
   cb/              separate convertible-bond line: free-source lake, double-low engine, cross-checks,
                    and its own forward paper record (docs/cb_lake.md)
   execution/       vnpy live-gateway adapters — deferred stub, unused
-scripts/           *_study.py = one research experiment, each written up in docs/ (risk_control A1–A9, no A5; multi_factor, factor_research, engine_validation, oos_decay, index_rotation, index_effect, liquidity_factor -> factor_research + risk_control; cb_double_low -> cb_lake; limit_up -> limit_up_study); else operational drivers (paper_live, build_*, ingest_union)
+scripts/           *_study.py = one research experiment, each written up in docs/ (risk_control A1–A9, no A5; multi_factor, factor_research, engine_validation, oos_decay, index_rotation, index_effect, liquidity_factor -> factor_research + risk_control; cb_double_low -> cb_lake; limit_up -> limit_up_study; quality_value, pyramid_entry, cyclical_pe, box_trading, margin_timing -> ruleset_studies); else operational drivers (paper_live, build_*, ingest_union)
   probes/          early one-off probes, superseded (kept for provenance)
-tests/             pytest suite (127 tests): engine invariants, no-look-ahead, parity gates
+tests/             pytest suite (150 tests): engine invariants, no-look-ahead, parity gates
 data/              local data lake — INPUTS (gitignored)
 results/           generated OUTPUTS: signals, backtests, figures, paper ledgers (gitignored)
 external/          upstream checkouts (vnpy, RQAlpha), pip install -e — gitignored, unmodified
