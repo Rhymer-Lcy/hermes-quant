@@ -33,3 +33,15 @@ def clustered_tstat(x: pd.Series, dates: pd.Series, freq: str = "M") -> float:
     g = pd.DataFrame({"x": np.asarray(x, dtype=float),
                       "p": pd.DatetimeIndex(dates).to_period(freq)}).dropna()
     return tstat(g.groupby("p")["x"].mean())
+
+
+def sharpe(daily: pd.Series, periods: int = 252) -> float:
+    """Annualized Sharpe of a daily return series (risk-free rate 0, the repo convention).
+    NaN when there is nothing to measure or no dispersion (same tolerance as `tstat`)."""
+    x = pd.Series(daily, dtype=float).dropna()
+    if len(x) < 2:
+        return float("nan")
+    sd = float(x.std(ddof=1))
+    if not np.isfinite(sd) or sd < 1e-12:
+        return float("nan")
+    return float(x.mean() / sd * np.sqrt(periods))
