@@ -213,6 +213,6 @@ def quality_mask(dates: pd.DatetimeIndex, codes, roe: pd.DataFrame | None = None
         ok = (g["roeAvg"].rolling(n_reports).min() > threshold).to_numpy()
         step = pd.Series(ok, index=g["pubDate"].to_numpy())
         step = step[~step.index.duplicated(keep="last")]
-        aligned = step.reindex(dates, method="ffill").fillna(False).astype(bool)
-        out[code] = aligned.to_numpy()
+        aligned = step.reindex(dates, method="ffill").eq(True)   # NaN before first pub -> False
+        out[code] = aligned.to_numpy(dtype=bool)
     return out
