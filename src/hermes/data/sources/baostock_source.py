@@ -205,6 +205,29 @@ def daily_bars(code: str, start: str, end: str, adjustflag: str = "2") -> pd.Dat
     return df
 
 
+def annual_profit(code: str, year: int) -> pd.DataFrame:
+    """One name's ANNUAL profitability report (the Q4 row of query_profit_data, whose income
+    items are year-to-date cumulative -- so Q4 roeAvg IS the full-year ROE, as a decimal).
+    Call inside `session()`. Columns include code, pubDate, statDate, roeAvg; `pubDate` is the
+    actual publication date, which is what makes point-in-time alignment possible (an annual
+    report typically publishes the following March-April, and counting it any earlier would
+    leak). Empty DataFrame when the name has no report for that year (not yet listed)."""
+    rs = bs.query_profit_data(code=code, year=year, quarter=4)
+    if rs.error_code != "0":
+        raise RuntimeError(f"BaoStock profit query failed for {code}/{year}: "
+                           f"{rs.error_code} {rs.error_msg}")
+    rows = []
+    while rs.next():
+        rows.append(rs.get_row_data())
+    df = pd.DataFrame(rows, columns=rs.fields)
+    if df.empty:
+        return df
+    df["pubDate"] = pd.to_datetime(df["pubDate"])
+    df["statDate"] = pd.to_datetime(df["statDate"])
+    df["roeAvg"] = pd.to_numeric(df["roeAvg"], errors="coerce")
+    return df
+
+
 def stock_industry(date: str | None = None) -> pd.DataFrame:
     """Shenwan industry classification, FREE. Call inside `session()`.
 
