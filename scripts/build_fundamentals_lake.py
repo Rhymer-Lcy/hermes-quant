@@ -37,6 +37,16 @@ def main() -> None:
     roe = pull_annual_profit(codes, years)
     print(f"annual ROE table: {len(roe)} reports, {roe['code'].nunique()} names")
 
+    # HARD completeness gate: a code whose pull failed is not in the checkpoint, and a study
+    # run against a silently partial lake is how a verdict inverts (the A6 lesson). Re-running
+    # this script resumes from the checkpoint and retries only the failed codes.
+    from hermes.data.fundamentals import _pull_done_path
+    done = set(_pull_done_path().read_text(encoding="utf-8").split())
+    missing = [c for c in codes if c not in done]
+    if missing:
+        raise SystemExit(f"ABORT: {len(missing)} codes incomplete (first: {missing[:5]}); "
+                         f"re-run to resume")
+
 
 if __name__ == "__main__":
     main()

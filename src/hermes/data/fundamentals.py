@@ -57,45 +57,92 @@ def bucket_of(industry: str) -> str | None:
     return None
 
 
-def pull_annual_profit(codes, years, pause: float = 0.1) -> pd.DataFrame:
+def _relogin_patiently(bss, max_tries: int = 6) -> None:
+    """Re-establish a dropped BaoStock session, tolerating the case where the RE-LOGIN itself
+    hits the transport-error family (observed: a throttling cascade takes out login too). Backs
+    off 5s -> 10s -> ... -> 60s; only after `max_tries` straight failures does it give up."""
+    for k in range(max_tries):
+        try:
+            bss.relogin()
+            return
+        except Exception as exc:  # noqa: BLE001 -- only the transient family is worth waiting on
+            if k + 1 >= max_tries or not bss.is_transport_error(str(exc)):
+                raise
+            time.sleep(min(60.0, 5.0 * 2.0 ** k))
+
+
+def _pull_done_path():
+    from ..paths import RAW_DIR
+    return RAW_DIR / "profit_pull_done.txt"
+
+
+def pull_annual_profit(codes, years, pause: float = 0.2) -> pd.DataFrame:
     """Pull annual-report profitability for every (code, year) -> profit_annual.parquet.
 
-    Manages its own BaoStock session with the same drop/transport recovery discipline as the
-    daily-bar ingest (a dropped session poisons every subsequent query in a serial batch).
+    RESUMABLE: completed codes are checkpointed (data/raw/profit_pull_done.txt plus the
+    accumulated parquet) every 50 names, and a re-run skips them -- so a mid-batch throttling
+    cascade costs minutes, not the whole pull. A code is marked done only if EVERY year query
+    succeeded; failed codes stay eligible for the next run. The pace and the patient re-login
+    follow the daily-bar ingest lessons (hammering triggers server-side throttling; a partial
+    lake that loads without complaint is how a study silently inverts its verdict, so the
+    caller must treat leftover failed codes as a hard stop, not a warning).
+
     Returns the assembled table; an empty (code, year) -- not yet listed -- is simply absent.
     """
-    from ..io import atomic_to_parquet
+    from ..io import atomic_to_parquet, atomic_write_text
     from .sources import baostock_source as bss
 
+    done_path = _pull_done_path()
+    done: set[str] = (set(done_path.read_text(encoding="utf-8").split())
+                      if done_path.exists() else set())
+    table = (pd.read_parquet(PROFIT_ANNUAL_PARQUET) if PROFIT_ANNUAL_PARQUET.exists()
+             else pd.DataFrame(columns=["code", "pubDate", "statDate", "roeAvg"]))
+    todo = [c for c in codes if c not in done]
+    if done:
+        print(f"  resuming: {len(done)} codes already complete, {len(todo)} to go")
+
+    def checkpoint(frames: list[pd.DataFrame]) -> pd.DataFrame:
+        merged = pd.concat([table, *frames], ignore_index=True)
+        merged = (merged.drop_duplicates(["code", "statDate"], keep="last")
+                        .sort_values(["code", "statDate"]).reset_index(drop=True))
+        atomic_to_parquet(merged, PROFIT_ANNUAL_PARQUET, index=False)
+        atomic_write_text("\n".join(sorted(done)), done_path)
+        return merged
+
     frames: list[pd.DataFrame] = []
-    errors: list[str] = []
-    n = len(codes)
+    failed: list[str] = []
+    n = len(todo)
     with bss.session():
-        for i, code in enumerate(codes, 1):
+        for i, code in enumerate(todo, 1):
+            code_frames, code_ok = [], True
             for year in years:
                 for attempt in range(4):
                     try:
                         df = bss.annual_profit(code, year)
                         if not df.empty:
-                            frames.append(df[["code", "pubDate", "statDate", "roeAvg"]])
+                            code_frames.append(df[["code", "pubDate", "statDate", "roeAvg"]])
                         break
                     except Exception as exc:  # noqa: BLE001 -- retry the recoverable families
                         msg = str(exc)
                         recoverable = bss.is_session_error(msg) or bss.is_transport_error(msg)
                         if attempt + 1 >= 4 or not recoverable:
-                            errors.append(f"{code}/{year}: {msg}")
+                            failed.append(f"{code}/{year}: {msg}")
+                            code_ok = False
                             break
                         time.sleep(2.0 ** attempt)
-                        bss.relogin()
+                        _relogin_patiently(bss)
                 time.sleep(pause)
-            if i % 25 == 0 or i == n:
-                print(f"  ...{i}/{n} names ({len(errors)} errors)")
-    table = (pd.concat(frames, ignore_index=True) if frames
-             else pd.DataFrame(columns=["code", "pubDate", "statDate", "roeAvg"]))
-    table = table.sort_values(["code", "statDate"]).reset_index(drop=True)
-    atomic_to_parquet(table, PROFIT_ANNUAL_PARQUET, index=False)
-    if errors:
-        print(f"  {len(errors)} (code, year) queries failed; first few: {errors[:5]}")
+            if code_ok:
+                frames.extend(code_frames)
+                done.add(code)
+            if i % 50 == 0 or i == n:
+                table = checkpoint(frames)
+                frames = []
+                print(f"  ...{i}/{n} names ({len(failed)} failed queries)")
+    table = checkpoint(frames)
+    if failed:
+        print(f"  {len(failed)} (code, year) queries failed; first few: {failed[:5]}")
+        print("  the failed codes are NOT checkpointed -- re-run to retry them")
     return table
 
 
