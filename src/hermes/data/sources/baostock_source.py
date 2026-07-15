@@ -229,7 +229,8 @@ def annual_profit(code: str, year: int) -> pd.DataFrame:
 
 
 def stock_industry(date: str | None = None) -> pd.DataFrame:
-    """Shenwan industry classification, FREE. Call inside `session()`.
+    """CSRC industry classification (the `industry` string leads with the CSRC class code,
+    e.g. 'J66...'), FREE. Call inside `session()`.
 
     `date=None` returns the latest snapshot; `date='2020-06-30'` returns the snapshot
     effective at/just before that date (DATE-AWARE -> point-in-time capable). Columns:
