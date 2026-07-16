@@ -1,4 +1,4 @@
-# Friends' rulesets, tested: seven pre-registered studies
+# Friends' rulesets, tested: eight pre-registered studies
 
 A friend who trades A-shares stated their system orally (about half a year of live experience;
 tested with their consent, no holdings shared). Every mechanically testable rule in it was
@@ -13,7 +13,7 @@ study code existed (for #7, before the event list existed). The friend's discret
 consumption upgrade") is untestable without a point-in-time watchlist and was declared out of
 scope; verdicts bind the frozen operationalizations, not the person.
 
-Shared conventions (all five): point-in-time HS300+CSI500 members, non-ST, ≥ 20 prior traded
+Shared conventions (the whole series): point-in-time HS300+CSI500 members, non-ST, ≥ 20 prior traded
 days, 2015–present; signal at close t, execute at close t+1; proportional retail costs
 (commission + transfer + slippage, sell-side stamp tax; the ¥5 minimum and 100-share lots are
 sub-basis-point at study scale and excluded); verdicts on **monthly-clustered t** of daily
@@ -200,3 +200,25 @@ does not stay up — cost-anchoring plus partial investment make "it came back" 
 unfalsifiable, which is precisely why it feels so reliable from inside. The one genuine
 failure (agriculture, triggered 2001-09) took the better part of five years to surface — the
 regime-death tail the creed has no answer for.
+
+## #9 The dividend-yield band on banks — REJECTED (positive but unproven; the example name is the counterexample)
+
+`python scripts/dividend_band_study.py` — the first friend's own if-then ("buy above 5.5%
+yield, sell below 4.5%"), tested on their high-dividend sleeve: 41 lake banks, 490
+ex-dividend events, point-in-time trailing yield over the unadjusted close.
+
+| variant | wealth | bench | active/yr | t(month) |
+|---|---:|---:|---:|---:|
+| **P_band vs all-banks EW NET (the verdict)** | 2.376 | 1.531 | **+3.31%** | **1.09** |
+| 2020–2026 | 1.672 | 1.282 | +3.88% | 2.23 |
+| all four ±0.5pp threshold variants | 2.16–2.47 | 1.531 | +2.2% to +3.9% | 0.59–1.48 |
+| the single-name example | 1.744 | 4.039 | −10.90% | −1.48 |
+
+The strongest point estimate of the series — +3.3%/yr over owning all banks, better Sharpe,
+every threshold variant positive — and still REJECTED: the full-window monthly-clustered t
+is 1.09 against the frozen bar of 2. Eleven years of active return that arrives in a few
+repricing waves cannot prove itself at the pre-registered standard; recorded as "positive
+but unproven," not "worthless." The telling detail: on the very bank the friend quoted, the
+band exits whenever the yield compresses — i.e., whenever the stock re-rates — and finished
+at 1.74x against 4.04x for holding it. A yield band is value timing in income clothing: it
+trades away from the sector's strongest name and lives off the laggards' mean reversion.
