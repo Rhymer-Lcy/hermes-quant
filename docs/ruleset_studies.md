@@ -9,7 +9,12 @@ scale-in, [#4](https://github.com/Rhymer-Lcy/hermes-quant/issues/4) inverse-PE o
 [#6](https://github.com/Rhymer-Lcy/hermes-quant/issues/6) margin-balance timing, and later
 [#7](https://github.com/Rhymer-Lcy/hermes-quant/issues/7) the Premier's-symposium attendance
 signal (the friend's own proposal for quantifying the policy-selection layer) — BEFORE any
-study code existed (for #7, before the event list existed). The friend's discretionary stock selection ("national policy 2–5 years out,
+study code existed (for #7, before the event list existed). Follow-ups arrived as concrete
+if-thens were supplied: [#9](https://github.com/Rhymer-Lcy/hermes-quant/issues/9) the
+dividend-yield band, [#10](https://github.com/Rhymer-Lcy/hermes-quant/issues/10) the
+ROE-slope anchor, [#11](https://github.com/Rhymer-Lcy/hermes-quant/issues/11) the
+ROE-decline exit; [#8](https://github.com/Rhymer-Lcy/hermes-quant/issues/8) tests a SECOND
+friend's creed (attributed in its section). The friend's discretionary stock selection ("national policy 2–5 years out,
 consumption upgrade") is untestable without a point-in-time watchlist and was declared out of
 scope; verdicts bind the frozen operationalizations, not the person.
 
