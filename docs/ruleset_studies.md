@@ -222,3 +222,29 @@ but unproven," not "worthless." The telling detail: on the very bank the friend 
 band exits whenever the yield compresses — i.e., whenever the stock re-rates — and finished
 at 1.74x against 4.04x for holding it. A yield band is value timing in income clothing: it
 trades away from the sector's strongest name and lives off the laggards' mean reversion.
+
+## #10 The ROE-slope anchor — REJECTED (the level fails, a rank survives, the theory fits one stock)
+
+`python scripts/roe_anchor_study.py` — the first friend’s theory: total return tracks average
+ROE, so buy far below the compounding line. As frozen (deviation ≤ −30% from the PIT anchor,
+monthly EW vs the universe): −0.02%/yr, t = 0.06 — empty — and the pre-declared weak joint is
+fatal (re-basing the anchor at the 5th instead of 3rd report flips it to −4.9%/yr). The frozen
+quintile read is the theory’s best moment: the deepest-below-anchor quintile earns +2.90%/yr
+(t = 3.84), fading monotonically — deviation ranks returns cross-sectionally even though the
+absolute level says nothing (it overlaps the repo’s value-factor findings; noted, not
+promoted). The descriptive half dies in the cross-section: corr(mean ROE, realized CAGR) =
+0.04 with slope 0.00 over 1,244 names — while the friend’s own hydropower example fits
+beautifully (14.7% ROE vs 12.1% CAGR). The theory is true of the stock they hold, not of the
+market they infer it from. **REJECTED.**
+
+## #11 The ROE-decline exit — REJECTED (the drift runs the wrong way)
+
+`python scripts/roe_decline_study.py` — 1,090 marked annual-ROE declines at quality names
+(≥5pp below the prior three reports’ mean, that mean ≥15%). The sell trigger needed a
+negative 250d drift at t < −2; it got **+0.97% at t = +2.33** — nearly significant the other
+way. An annual report’s decline is telegraphed by three quarterlies, so by publication day
+the punishment is done and the next year skews toward recovery; the severe-decline tercile
+drifts most positive (+2.01%). Acting on the trigger would have systematically sold local
+bottoms. The instinct (deteriorating ROE matters) is not refuted; the timing (act on the
+annual print) is — a quarterly-frequency version is a different, unregistered claim.
+**REJECTED.**
