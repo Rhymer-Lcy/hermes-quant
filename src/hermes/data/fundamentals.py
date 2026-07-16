@@ -24,6 +24,8 @@ from ..paths import PARQUET_DIR
 PROFIT_ANNUAL_PARQUET = PARQUET_DIR / "profit_annual.parquet"
 INDUSTRY_PARQUET = PARQUET_DIR / "industry_csrc.parquet"
 MARGIN_SSE_PARQUET = PARQUET_DIR / "margin_sse.parquet"
+DIVIDENDS_PARQUET = PARQUET_DIR / "dividends.parquet"
+RAW_CLOSE_PARQUET = PARQUET_DIR / "raw_close.parquet"
 
 # The five-bucket CSRC mapping frozen in issue #4's appendix (shared by issues #2-#6).
 BUCKETS = {
@@ -184,6 +186,72 @@ def pull_margin_sse(start: str = "2015-01-01", end: str | None = None) -> pd.Dat
         "rzye": pd.to_numeric(raw["融资余额"], errors="coerce"),
     }).dropna().sort_values("date").drop_duplicates("date").reset_index(drop=True)
     atomic_to_parquet(out, MARGIN_SSE_PARQUET, index=False)
+    return out
+
+
+def pull_dividends(codes, years, pause: float = 0.1) -> pd.DataFrame:
+    """Cash-dividend events for every (code, ex-year) -> dividends.parquet. Kept columns:
+    code, ex_date (除权除息日 -- the point-in-time anchor: a declared dividend counts only
+    once it has gone ex), dps (per-share pre-tax cash). Small batches only (a sector, not
+    the whole lake); manages its own session."""
+    import baostock as bs
+
+    from ..io import atomic_to_parquet
+    from .sources import baostock_source as bss
+
+    rows = []
+    with bss.session():
+        for code in codes:
+            for year in years:
+                rs = bs.query_dividend_data(code=code, year=str(year), yearType="operate")
+                if rs.error_code != "0":
+                    raise RuntimeError(f"dividend query failed for {code}/{year}: "
+                                       f"{rs.error_code} {rs.error_msg}")
+                while rs.next():
+                    rows.append(dict(zip(rs.fields, rs.get_row_data())))
+                time.sleep(pause)
+    df = pd.DataFrame(rows)
+    out = pd.DataFrame({
+        "code": df["code"],
+        "ex_date": pd.to_datetime(df["dividOperateDate"], errors="coerce"),
+        "dps": pd.to_numeric(df["dividCashPsBeforeTax"], errors="coerce"),
+    }).dropna(subset=["ex_date"]).fillna({"dps": 0.0})
+    out = out.sort_values(["code", "ex_date"]).reset_index(drop=True)
+    atomic_to_parquet(out, DIVIDENDS_PARQUET, index=False)
+    return out
+
+
+def pull_raw_close(codes, start: str = "2015-01-01", end: str | None = None) -> pd.DataFrame:
+    """UNADJUSTED daily closes for a small set of codes -> raw_close.parquet (wide). The
+    dividend yield must divide by the price actually quoted that day; the adjusted lake
+    series would distort every historical yield."""
+    from ..io import atomic_to_parquet
+    from .sources import baostock_source as bss
+
+    end = end or pd.Timestamp.now().strftime("%Y-%m-%d")
+    series = {}
+    with bss.session():
+        for code in codes:
+            df = bss.daily_bars(code, start, end, adjustflag="3")
+            if not df.empty:
+                series[code] = df.set_index("date")["close"]
+            time.sleep(0.2)
+    panel = pd.DataFrame(series).sort_index()
+    atomic_to_parquet(panel, RAW_CLOSE_PARQUET)
+    return panel
+
+
+def trailing_yield(dividends: pd.DataFrame, raw_close: pd.DataFrame) -> pd.DataFrame:
+    """Point-in-time trailing dividend yield: the 365-calendar-day rolling sum of per-share
+    cash dividends (counted from ex-date) divided by the unadjusted close."""
+    # Roll on a FULL calendar reaching 365 days before the price window, so the trailing sum
+    # at the window's start still sees the prior year's ex-dates; then align to trading days.
+    full = pd.date_range(raw_close.index.min() - pd.Timedelta(days=370), raw_close.index.max())
+    out = pd.DataFrame(index=raw_close.index, columns=raw_close.columns, dtype=float)
+    for code in raw_close.columns:
+        ev = dividends.loc[dividends["code"] == code].groupby("ex_date")["dps"].sum()
+        ttm = ev.reindex(full, fill_value=0.0).rolling("365D").sum().reindex(raw_close.index)
+        out[code] = ttm / raw_close[code]
     return out
 
 

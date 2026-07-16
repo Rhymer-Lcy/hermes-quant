@@ -45,3 +45,16 @@ def test_quality_gate_needs_all_recent_reports_above_threshold():
 def test_quality_gate_requires_three_published_reports():
     roe = _roe("A", [("2013-04-01", 0.20), ("2014-04-01", 0.18)])
     assert not quality_mask(DATES, ["A"], roe=roe)["A"].any()
+
+
+def test_trailing_yield_sees_ex_dates_before_the_price_window_and_ages_them_out():
+    from hermes.data.fundamentals import trailing_yield
+    idx = pd.bdate_range("2015-01-05", periods=300)
+    raw = pd.DataFrame({"A": 10.0}, index=idx)
+    div = pd.DataFrame({"code": ["A", "A"],
+                        "ex_date": pd.to_datetime(["2014-07-01", "2015-06-01"]),
+                        "dps": [0.5, 0.6]})
+    y = trailing_yield(div, raw)["A"]
+    assert abs(y.iloc[0] - 0.05) < 1e-12            # the 2014 dividend is visible on day one
+    assert abs(y.loc["2015-06-30"] - 0.11) < 1e-12  # both inside the trailing year: 1.1/10
+    assert abs(y.loc["2016-02-01"] - 0.06) < 1e-12  # the 2014 event has aged out
