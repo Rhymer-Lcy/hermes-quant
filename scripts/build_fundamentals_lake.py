@@ -8,6 +8,9 @@ of the long one loses nothing else.
 
     conda activate hermes
     python scripts/build_fundamentals_lake.py
+
+To refresh the ROE lake after a new fiscal year's reports publish, delete the resume
+checkpoint (data/raw/profit_pull_done.txt) first -- a completed checkpoint skips every code.
 """
 from __future__ import annotations
 
