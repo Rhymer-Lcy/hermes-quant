@@ -5,7 +5,10 @@
 
 # local data lake & caches (large, regenerable) — anchored to repo root so the
 # `hermes/data/` source package is NOT ignored, only the top-level data lake.
-/data/
+# data/manual/ is the one tracked exception: small hand-compiled reference inputs
+# (e.g. the symposium event list) that a study cannot regenerate from a vendor.
+/data/*
+!/data/manual/
 /results/
 *.joblib
 *.parquet
