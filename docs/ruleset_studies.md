@@ -1,4 +1,4 @@
-# A friend's ruleset, tested: six pre-registered studies
+# Friends' rulesets, tested: seven pre-registered studies
 
 A friend who trades A-shares stated their system orally (about half a year of live experience;
 tested with their consent, no holdings shared). Every mechanically testable rule in it was
@@ -179,3 +179,24 @@ information) and otherwise stays out of scope. A point-in-time forward registrat
 friend's actual watchlist opened on 2026-07-15 (hash commitment in issue #2's thread;
 plaintext off-repo) — if their real edge lives in selection rather than rules, that record is
 what will eventually show it.
+
+## #8 A second friend: the conviction-sector creed — CONFIRMED, and financially empty
+
+`python scripts/sector_creed_study.py` — a different friend's system (relayed with consent):
+pick your sector, add on every dip, hold — "it always comes back." The creed was frozen as:
+the −20/−30/−40% ladder recovers its averaged-down cost within 500 trading days, in ≥ 90% of
+≥ 20%-drawdown episodes across all 31 Shenwan level-1 indices, with a deliberately generous
++2%/yr dividend credit. Data: `data/parquet/sw_indices.parquet` (2000 → present); 202
+episodes, 173 decided.
+
+**Result: 99.4% recover — CONFIRMED as frozen — and the confirmation is the finding.** The
+median episode touches break-even ON DAY ONE (the ladder is only a third invested and
+cost-anchored, so any bounce clears the bar); the friend's own sectors run 23/23. But the
+median episode ends the 500 days at **0.978x**, **56.6% finish below cost after having
+touched it**, the worst episodes finish near 0.55x (agriculture 2001, media/computers 2015),
+and the identical tranche schedule wired into the HS300 instead of the conviction sector ends
+at the same place (t = 1.53). The creed is true the way a fishing float bobs: it surfaces, it
+does not stay up — cost-anchoring plus partial investment make "it came back" almost
+unfalsifiable, which is precisely why it feels so reliable from inside. The one genuine
+failure (agriculture, triggered 2001-09) took the better part of five years to surface — the
+regime-death tail the creed has no answer for.
