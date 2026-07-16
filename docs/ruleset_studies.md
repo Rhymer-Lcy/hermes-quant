@@ -1,4 +1,4 @@
-# A friend's ruleset, tested: five pre-registered studies
+# A friend's ruleset, tested: six pre-registered studies
 
 A friend who trades A-shares stated their system orally (about half a year of live experience;
 tested with their consent, no holdings shared). Every mechanically testable rule in it was
@@ -6,8 +6,10 @@ frozen into a pre-registered issue — [#2](https://github.com/Rhymer-Lcy/hermes
 quality-value entry, [#3](https://github.com/Rhymer-Lcy/hermes-quant/issues/3) inverted-pyramid
 scale-in, [#4](https://github.com/Rhymer-Lcy/hermes-quant/issues/4) inverse-PE on cyclicals,
 [#5](https://github.com/Rhymer-Lcy/hermes-quant/issues/5) the 120-day box,
-[#6](https://github.com/Rhymer-Lcy/hermes-quant/issues/6) margin-balance timing — BEFORE any
-study code existed. The friend's discretionary stock selection ("national policy 2–5 years out,
+[#6](https://github.com/Rhymer-Lcy/hermes-quant/issues/6) margin-balance timing, and later
+[#7](https://github.com/Rhymer-Lcy/hermes-quant/issues/7) the Premier's-symposium attendance
+signal (the friend's own proposal for quantifying the policy-selection layer) — BEFORE any
+study code existed (for #7, before the event list existed). The friend's discretionary stock selection ("national policy 2–5 years out,
 consumption upgrade") is untestable without a point-in-time watchlist and was declared out of
 scope; verdicts bind the frozen operationalizations, not the person.
 
@@ -127,6 +129,28 @@ one-sided: the exit leg alone (sell above the 80th percentile, otherwise stay in
 2.141 vs 1.684 — the only leg with any wealth edge, though at t = 0.57 it is indistinguishable
 from luck. The entry leg (wait for the trough reversal) only costs. **REJECTED.**
 
+## #7 The Premier's symposium — REJECTED (attendance carries no information)
+
+`python scripts/symposium_study.py` — the first crack at the selection layer: 24 symposiums
+(2015-04 → 2026-07) compiled AFTER the issue froze the source hierarchy and mapping rules,
+85 named entrepreneur speeches, 43 mapped to A-share tickers (list with one official source
+URL per event: `data/manual/symposium_events.csv`; flagship subsidiaries resolved by total
+market cap at the event date, computations recorded in the CSV notes).
+
+| horizon (net, vs HS300 EW) | N | mean | median | t(month) | hit |
+|---|---:|---:|---:|---:|---:|
+| 20d | 40 | +0.36% | −3.11% | 0.65 | 32.6% |
+| 60d | 40 | +2.58% | −3.50% | 0.59 | 41.9% |
+| **250d (the verdict)** | 38 | **+0.04%** | −1.55% | **0.08** | 41.9% |
+
+As close to zero as an event study gets. The shape is a lottery: the median invitee
+UNDERPERFORMS the size-matched benchmark at every horizon while a few big winners pull the
+mean back to flat; against the full-universe EW benchmark the events show −2.31% (the size
+confound the frozen HS300 benchmark exists to remove). Both premiers' eras are flat;
+Li-Qiang-era invitees skew weak (median −6.26%). Attendance as a buy signal is dead; the
+friend's symposium idea survives only as an unregistered CONTENT claim (which sectors get
+discussed), explicitly not tested here. **REJECTED.**
+
 ## Synthesis — five rules, five REJECTED, one coherent picture
 
 All five mechanical rules underperform their do-nothing benchmarks; none is significant in the
@@ -150,7 +174,8 @@ Three nuances the numbers force on that summary, in fairness to the system's aut
    certain (cyclical inverse-PE) is genuinely directionless (beats its mirror, loses to
    holding) — while the rule they were most confident in (#2) was the largest detractor.
 
-Out of scope, still: the discretionary selection layer. A point-in-time forward registration
-of the friend's actual watchlist opened on 2026-07-15 (hash commitment in issue #2's thread;
+The discretionary selection layer got one mechanical probe (#7: symposium attendance — no
+information) and otherwise stays out of scope. A point-in-time forward registration of the
+friend's actual watchlist opened on 2026-07-15 (hash commitment in issue #2's thread;
 plaintext off-repo) — if their real edge lives in selection rather than rules, that record is
 what will eventually show it.

@@ -99,10 +99,10 @@ src/hermes/        the engine — importable package (src-layout); no trading-fr
   cb/              separate convertible-bond line: free-source lake, double-low engine, cross-checks,
                    and its own forward paper record (docs/cb_lake.md)
   execution/       vnpy live-gateway adapters — deferred stub, unused
-scripts/           *_study.py = one research experiment, each written up in docs/ (risk_control A1–A9, no A5; multi_factor, factor_research, engine_validation, oos_decay, index_rotation, index_effect, liquidity_factor -> factor_research + risk_control; cb_double_low -> cb_lake; limit_up -> limit_up_study; quality_value, pyramid_entry, cyclical_pe, box_trading, margin_timing -> ruleset_studies); else operational drivers (paper_live, build_*, ingest_union)
+scripts/           *_study.py = one research experiment, each written up in docs/ (risk_control A1–A9, no A5; multi_factor, factor_research, engine_validation, oos_decay, index_rotation, index_effect, liquidity_factor -> factor_research + risk_control; cb_double_low -> cb_lake; limit_up -> limit_up_study; quality_value, pyramid_entry, cyclical_pe, box_trading, margin_timing, symposium -> ruleset_studies); else operational drivers (paper_live, build_*, ingest_union)
   probes/          early one-off probes, superseded (kept for provenance)
 tests/             pytest suite (150 tests): engine invariants, no-look-ahead, parity gates
-data/              local data lake — INPUTS (gitignored)
+data/              local data lake — INPUTS (gitignored, except data/manual/: small hand-compiled reference inputs a study cannot regenerate, e.g. the symposium event list)
 results/           generated OUTPUTS: signals, backtests, figures, paper ledgers (gitignored)
 external/          upstream checkouts (vnpy, RQAlpha), pip install -e — gitignored, unmodified
 docs/              architecture & curated research findings (tracked)
