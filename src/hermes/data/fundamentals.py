@@ -335,11 +335,48 @@ def pull_raw_close(codes, start: str = "2015-01-01", end: str | None = None,
     return panel
 
 
+def _holder_counts_f10(code: str) -> pd.DataFrame | None:
+    """Fallback for names absent from the akshare DET report (observed for delisted names
+    and a minority of live ones): the same vendor's F10 holder-number report
+    (RPT_F10_EH_HOLDERNUM), same fields incl. the NOTICE_DATE point-in-time anchor.
+    Returns None when the vendor has no data for the code at all."""
+    import requests
+
+    exch, num = code.split(".")
+    url = "https://datacenter-web.eastmoney.com/api/data/v1/get"
+    rows, page = [], 1
+    while True:
+        params = {"sortColumns": "END_DATE", "sortTypes": "-1", "pageSize": "500",
+                  "pageNumber": str(page), "reportName": "RPT_F10_EH_HOLDERNUM",
+                  "columns": "SECUCODE,END_DATE,NOTICE_DATE,HOLDER_TOTAL_NUM,"
+                             "HOLDER_TOTAL_NUMCHANGE",
+                  "filter": f'(SECUCODE="{num}.{exch.upper()}")',
+                  "source": "WEB", "client": "WEB"}
+        res = requests.get(url, params=params, timeout=30).json().get("result")
+        if res is None:
+            return None if page == 1 else pd.DataFrame(rows)
+        rows.extend(res["data"])
+        if page >= res["pages"]:
+            break
+        page += 1
+    raw = pd.DataFrame(rows)
+    holders = pd.to_numeric(raw["HOLDER_TOTAL_NUM"], errors="coerce")
+    change = pd.to_numeric(raw["HOLDER_TOTAL_NUMCHANGE"], errors="coerce")
+    return pd.DataFrame({
+        "code": code,
+        "stat_date": pd.to_datetime(raw["END_DATE"], errors="coerce"),
+        "pub_date": pd.to_datetime(raw["NOTICE_DATE"], errors="coerce"),
+        "holders": holders,
+        "prior_holders": holders - change,
+    }).dropna(subset=["stat_date", "pub_date", "holders"])
+
+
 def pull_holder_counts(codes, pause: float = 0.5) -> pd.DataFrame:
     """Shareholder-count disclosure history per name (Eastmoney via akshare
-    `stock_zh_a_gdhs_detail_em`) -> holder_counts.parquet. Kept columns: code, stat_date
-    (统计截止日), pub_date (公告日期 -- the point-in-time anchor: the market learns the
-    count only at publication), holders (本次), prior_holders (上次).
+    `stock_zh_a_gdhs_detail_em`, falling back to the vendor's F10 report for names the DET
+    report lacks) -> holder_counts.parquet. Kept columns: code, stat_date (统计截止日),
+    pub_date (公告日期 -- the point-in-time anchor: the market learns the count only at
+    publication), holders (本次), prior_holders (上次).
 
     RESUMABLE: completed codes checkpoint to data/raw/holder_pull_done.txt every 25 names;
     an empty vendor response still counts as pulled."""
@@ -371,7 +408,16 @@ def pull_holder_counts(codes, pause: float = 0.5) -> pd.DataFrame:
     for i, code in enumerate(todo, 1):
         for attempt in range(4):
             try:
-                raw = ak.stock_zh_a_gdhs_detail_em(symbol=code.split(".")[1])
+                try:
+                    raw = ak.stock_zh_a_gdhs_detail_em(symbol=code.split(".")[1])
+                except TypeError:
+                    # the DET report has no rows for this name -- try the F10 fallback;
+                    # None there too means the vendor has nothing (counts as pulled)
+                    f10 = _holder_counts_f10(code)
+                    if f10 is not None and not f10.empty:
+                        frames.append(f10)
+                    done.add(code)
+                    break
                 if not raw.empty:
                     frames.append(pd.DataFrame({
                         "code": code,
