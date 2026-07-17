@@ -46,8 +46,8 @@ def pull_bars(meta: pd.DataFrame, pause: float = 0.2) -> pd.DataFrame:
     done: set[str] = (set(done_path.read_text(encoding="utf-8").split())
                       if done_path.exists() else set())
     table = (pd.read_parquet(IPO_BARS_PARQUET) if IPO_BARS_PARQUET.exists()
-             else pd.DataFrame(columns=["code", "date", "open_raw", "close_raw",
-                                        "open_hfq", "close_hfq"]))
+             else pd.DataFrame(columns=["code", "date", "open_raw", "high_raw", "low_raw",
+                                        "close_raw", "open_hfq", "close_hfq"]))
     end = pd.Timestamp.now().strftime("%Y-%m-%d")
     listed = meta[meta["list_date"] <= end]
     todo = [(c, d) for c, d in zip(listed["code"], listed["list_date"]) if c not in done]
@@ -88,6 +88,8 @@ def pull_bars(meta: pd.DataFrame, pause: float = 0.2) -> pd.DataFrame:
                     frames.append(pd.DataFrame({
                         "code": code, "date": r.index,
                         "open_raw": r["open"].to_numpy(),
+                        "high_raw": r["high"].to_numpy(),
+                        "low_raw": r["low"].to_numpy(),
                         "close_raw": r["close"].to_numpy(),
                         "open_hfq": h["open"].reindex(r.index).to_numpy(),
                         "close_hfq": h["close"].reindex(r.index).to_numpy(),
