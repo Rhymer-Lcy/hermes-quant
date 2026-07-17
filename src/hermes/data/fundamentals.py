@@ -111,7 +111,8 @@ def pull_annual_profit(codes, years, pause: float = 0.2) -> pd.DataFrame:
         print(f"  resuming: {len(done)} codes already complete, {len(todo)} to go")
 
     def checkpoint(frames: list[pd.DataFrame]) -> pd.DataFrame:
-        merged = pd.concat([table, *frames], ignore_index=True)
+        objs = [f for f in [table, *frames] if not f.empty]
+        merged = pd.concat(objs, ignore_index=True) if objs else table
         merged = (merged.drop_duplicates(["code", "statDate"], keep="last")
                         .sort_values(["code", "statDate"]).reset_index(drop=True))
         atomic_to_parquet(merged, PROFIT_ANNUAL_PARQUET, index=False)
@@ -228,7 +229,8 @@ def pull_dividends(codes, years, pause: float = 0.1) -> pd.DataFrame:
         print(f"  resuming: {len(done)} codes already complete, {len(todo)} to go")
 
     def checkpoint(frames: list[pd.DataFrame]) -> pd.DataFrame:
-        merged = pd.concat([table, *frames], ignore_index=True)
+        objs = [f for f in [table, *frames] if not f.empty]
+        merged = pd.concat(objs, ignore_index=True) if objs else table
         merged = (merged.drop_duplicates().sort_values(["code", "ex_date"])
                         .reset_index(drop=True))
         atomic_to_parquet(merged, DIVIDENDS_PARQUET, index=False)
@@ -395,7 +397,8 @@ def pull_holder_counts(codes, pause: float = 0.5) -> pd.DataFrame:
         print(f"  resuming: {len(done)} codes already complete, {len(todo)} to go")
 
     def checkpoint(frames: list[pd.DataFrame]) -> pd.DataFrame:
-        merged = pd.concat([table, *frames], ignore_index=True)
+        objs = [f for f in [table, *frames] if not f.empty]
+        merged = pd.concat(objs, ignore_index=True) if objs else table
         merged = (merged.drop_duplicates(["code", "stat_date"], keep="last")
                         .sort_values(["code", "stat_date"]).reset_index(drop=True))
         atomic_to_parquet(merged, HOLDER_COUNTS_PARQUET, index=False)
