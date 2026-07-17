@@ -27,6 +27,7 @@ MARGIN_SSE_PARQUET = PARQUET_DIR / "margin_sse.parquet"
 DIVIDENDS_PARQUET = PARQUET_DIR / "dividends.parquet"
 RAW_CLOSE_PARQUET = PARQUET_DIR / "raw_close.parquet"
 HOLDER_COUNTS_PARQUET = PARQUET_DIR / "holder_counts.parquet"
+CAPEX_ANNUAL_PARQUET = PARQUET_DIR / "capex_annual.parquet"
 
 # The five-bucket CSRC mapping frozen in issue #4's appendix (shared by issues #2-#6).
 BUCKETS = {
@@ -446,6 +447,102 @@ def pull_holder_counts(codes, pause: float = 0.5) -> pd.DataFrame:
     if failed:
         print(f"  {len(failed)} codes failed; first few: {failed[:5]} -- re-run to retry")
     return table
+
+
+def _capex_em(code: str) -> pd.DataFrame | None:
+    """One-request annual capex history from the vendor's datacenter cash-flow report
+    (RPT_DMSK_FN_CASHFLOW; the akshare yearly wrapper issues ~8 requests per name and was
+    ~20x slower, values verified identical). Annual rows are the 12-31 report dates.
+    Returns None when the vendor has no data for the code."""
+    import requests
+
+    exch, num = code.split(".")
+    rows, page = [], 1
+    while True:
+        params = {"sortColumns": "REPORT_DATE", "sortTypes": "-1", "pageSize": "500",
+                  "pageNumber": str(page), "reportName": "RPT_DMSK_FN_CASHFLOW",
+                  "columns": "SECUCODE,REPORT_DATE,NOTICE_DATE,CONSTRUCT_LONG_ASSET",
+                  "filter": f'(SECUCODE="{num}.{exch.upper()}")',
+                  "source": "WEB", "client": "WEB"}
+        res = requests.get("https://datacenter-web.eastmoney.com/api/data/v1/get",
+                           params=params, timeout=30).json().get("result")
+        if res is None:
+            return None if page == 1 else pd.DataFrame(rows)
+        rows.extend(res["data"])
+        if page >= res["pages"]:
+            break
+        page += 1
+    raw = pd.DataFrame(rows)
+    out = pd.DataFrame({
+        "code": code,
+        "stat_date": pd.to_datetime(raw["REPORT_DATE"], errors="coerce"),
+        "pub_date": pd.to_datetime(raw["NOTICE_DATE"], errors="coerce"),
+        "capex": pd.to_numeric(raw["CONSTRUCT_LONG_ASSET"], errors="coerce"),
+    }).dropna(subset=["stat_date", "pub_date"])
+    return out[(out["stat_date"].dt.month == 12) & (out["stat_date"].dt.day == 31)]
+
+
+def pull_capex(codes, pause: float = 0.3) -> pd.DataFrame:
+    """Annual-report capex per name (Eastmoney datacenter, `_capex_em`) ->
+    capex_annual.parquet. Kept columns: code, stat_date (REPORT_DATE), pub_date
+    (NOTICE_DATE -- the point-in-time anchor), capex (CONSTRUCT_LONG_ASSET: cash paid to
+    build fixed/intangible/other long-term assets).
+
+    RESUMABLE: completed codes checkpoint to data/raw/capex_pull_done.txt every 25 names;
+    an empty vendor response still counts as pulled."""
+    from ..io import atomic_to_parquet, atomic_write_text
+
+    done_path = _done_path("capex")
+    done: set[str] = (set(done_path.read_text(encoding="utf-8").split())
+                      if done_path.exists() else set())
+    table = (pd.read_parquet(CAPEX_ANNUAL_PARQUET) if CAPEX_ANNUAL_PARQUET.exists()
+             else pd.DataFrame(columns=["code", "stat_date", "pub_date", "capex"]))
+    todo = [c for c in codes if c not in done]
+    if done:
+        print(f"  resuming: {len(done)} codes already complete, {len(todo)} to go")
+
+    def checkpoint(frames: list[pd.DataFrame]) -> pd.DataFrame:
+        objs = [f for f in [table, *frames] if not f.empty]
+        merged = pd.concat(objs, ignore_index=True) if objs else table
+        merged = (merged.drop_duplicates(["code", "stat_date"], keep="last")
+                        .sort_values(["code", "stat_date"]).reset_index(drop=True))
+        atomic_to_parquet(merged, CAPEX_ANNUAL_PARQUET, index=False)
+        atomic_write_text("\n".join(sorted(done)), done_path)
+        return merged
+
+    frames: list[pd.DataFrame] = []
+    failed: list[str] = []
+    n = len(todo)
+    for i, code in enumerate(todo, 1):
+        for attempt in range(4):
+            try:
+                out = _capex_em(code)
+                if out is not None and not out.empty:
+                    frames.append(out)
+                done.add(code)
+                break
+            except Exception as exc:  # noqa: BLE001 -- vendor hiccups are worth a few retries
+                if attempt + 1 >= 4:
+                    failed.append(f"{code}: {exc}")
+                    break
+                time.sleep(5.0 * 2.0 ** attempt)
+        time.sleep(pause)
+        if i % 25 == 0 or i == n:
+            table = checkpoint(frames)
+            frames = []
+            print(f"  ...{i}/{n} names ({len(failed)} failed)")
+    table = checkpoint(frames)
+    if failed:
+        print(f"  {len(failed)} codes failed; first few: {failed[:5]} -- re-run to retry")
+    return table
+
+
+def load_capex() -> pd.DataFrame:
+    """The capex_annual lake as a typed table (code, stat_date, pub_date, capex)."""
+    df = pd.read_parquet(CAPEX_ANNUAL_PARQUET)
+    df["stat_date"] = pd.to_datetime(df["stat_date"])
+    df["pub_date"] = pd.to_datetime(df["pub_date"])
+    return df
 
 
 def load_holder_counts() -> pd.DataFrame:
