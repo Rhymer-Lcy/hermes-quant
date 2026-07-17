@@ -1,4 +1,4 @@
-# Friends' rulesets, tested: twelve pre-registered studies
+# Friends' rulesets, tested: fourteen pre-registered studies
 
 A friend who trades A-shares stated their system orally (about half a year of live experience;
 tested with their consent, no holdings shared). Every mechanically testable rule in it was
@@ -15,7 +15,10 @@ dividend-yield band, [#10](https://github.com/Rhymer-Lcy/hermes-quant/issues/10)
 ROE-slope anchor, [#11](https://github.com/Rhymer-Lcy/hermes-quant/issues/11) the
 ROE-decline exit, [#12](https://github.com/Rhymer-Lcy/hermes-quant/issues/12) the
 high-dividend long hold, [#13](https://github.com/Rhymer-Lcy/hermes-quant/issues/13) the
-holder-count surge; [#8](https://github.com/Rhymer-Lcy/hermes-quant/issues/8) tests a SECOND
+holder-count surge, [#14](https://github.com/Rhymer-Lcy/hermes-quant/issues/14) the
+growth-to-dividend transition, [#15](https://github.com/Rhymer-Lcy/hermes-quant/issues/15)
+the IPO allottee's exit (a decision study, not a rule on trial);
+[#8](https://github.com/Rhymer-Lcy/hermes-quant/issues/8) tests a SECOND
 friend's creed (attributed in its section). The friend's discretionary stock selection ("national policy 2–5 years out,
 consumption upgrade") is untestable without a point-in-time watchlist and was declared out of
 scope; verdicts bind the frozen operationalizations, not the person.
@@ -298,3 +301,41 @@ Holder counts surge together, in the few months retail floods in near local tops
 in every sub-sample (noted, not promoted). His illustration, NARI Tech (sh.600406): of five
 closed-window surges, three drifted UP (+5.1%, +23.7%, +10.9%) — the demonstration name
 contradicts the rule more often than it obeys it. **REJECTED.**
+
+## #14 The growth-to-dividend transition — REJECTED at the frozen bar (and the honest asterisk stated in full)
+
+`python scripts/capex_transition_study.py` — the friend's lifecycle rule ("the ceiling is
+capex winding down; the name becomes a dividend stock — buy that; Shenhua is the classic"),
+on a new 30,627-report annual-capex lake: 233 first-time transitions (capex ≤ 60% of the
+prior-5-report peak, trailing yield ≥ 3% at publication).
+
+| sample | N | mean | median | t(month) |
+|---|---:|---:|---:|---:|
+| **250d net (the verdict)** | 211 | **+2.78%** | −0.80% | **1.13** |
+| 500d net (frozen sensitivity) | 193 | +13.04% | +5.70% | 2.54 |
+
+REJECTED at the frozen 250d bar — with the series' most instructive asterisk. The one
+sensitivity frozen because "the re-rating thesis is slow" (500d) clears the monthly-clustered
+bar at +13.04%, the median turns positive only there, and the nearby cells lean the same way
+(peak ratio 70%: t 2.07; high-yield tercile: t 2.09). That is what a slow, real effect looks
+like — and also exactly what selective reading of eight sensitivity cells looks like; the
+frozen bar exists for precisely that ambiguity. Noted, not promoted; a clean promotion would
+need a fresh registration with a 500d primary, now disclosed as partially contaminated. And
+the classic itself: Shenhua's transition prints at the 2017 annual report — then **−10.24%**
+over 250d, −5.10% over 500d. The fourth consecutive example-name contradiction; the
+re-rating the friend remembers arrived years past any frozen window. The payback-clock annex
+confirmed its own scope note: 4 of 233 events paid back in-window; the "withdraw principal
+once cost goes negative" leg has no testable content at this horizon. **REJECTED.**
+
+## #15 The IPO allottee's exit — DECISION: sell the day-1 open
+
+`python scripts/ipo_exit_study.py` — a decision study (no rule on trial): the friend won a
+STAR allocation and asked when to sell. 610 STAR listings since the board opened. Allottee
+net return vs issue: +135.2% selling the day-1 open, monotonically DECAYING to +109.1% by
+the day-120 close; no later exit beats the open at monthly-clustered t > 2, so the frozen
+decision rule defaults to **sell the day-1 open**. The strongest conditional cell: the
+hotter the open, the harder the fade — the top open-pop tercile bleeds −14.97% (t −2.92) by
+day 60 and −16.4% (t −3.03) by day 120, the study's only significant cells. Day-5 close (the
+no-limit window's end) is the single worst exit (−4.35%, t −3.35). The mega cohort
+(proceeds ≥ ¥10bn, N=7, no decision weight) spans −8% to +246% pops and −52% to +240%
+post-open paths: bigger is not safer, only wider.
