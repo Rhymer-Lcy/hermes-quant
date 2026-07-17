@@ -26,6 +26,7 @@ INDUSTRY_PARQUET = PARQUET_DIR / "industry_csrc.parquet"
 MARGIN_SSE_PARQUET = PARQUET_DIR / "margin_sse.parquet"
 DIVIDENDS_PARQUET = PARQUET_DIR / "dividends.parquet"
 RAW_CLOSE_PARQUET = PARQUET_DIR / "raw_close.parquet"
+HOLDER_COUNTS_PARQUET = PARQUET_DIR / "holder_counts.parquet"
 
 # The five-bucket CSRC mapping frozen in issue #4's appendix (shared by issues #2-#6).
 BUCKETS = {
@@ -76,6 +77,12 @@ def _relogin_patiently(bss, max_tries: int = 6) -> None:
 def _pull_done_path():
     from ..paths import RAW_DIR
     return RAW_DIR / "profit_pull_done.txt"
+
+
+def _done_path(name: str):
+    """Per-pull resume checkpoint (a plain list of completed codes) under data/raw/."""
+    from ..paths import RAW_DIR
+    return RAW_DIR / f"{name}_pull_done.txt"
 
 
 def pull_annual_profit(codes, years, pause: float = 0.2) -> pd.DataFrame:
@@ -189,56 +196,216 @@ def pull_margin_sse(start: str = "2015-01-01", end: str | None = None) -> pd.Dat
     return out
 
 
+def _dividend_rows(raw: pd.DataFrame) -> pd.DataFrame:
+    """Typed (code, ex_date, dps) rows from raw BaoStock dividend records."""
+    return pd.DataFrame({
+        "code": raw["code"],
+        "ex_date": pd.to_datetime(raw["dividOperateDate"], errors="coerce"),
+        "dps": pd.to_numeric(raw["dividCashPsBeforeTax"], errors="coerce"),
+    }).dropna(subset=["ex_date"]).fillna({"dps": 0.0})
+
+
 def pull_dividends(codes, years, pause: float = 0.1) -> pd.DataFrame:
     """Cash-dividend events for every (code, ex-year) -> dividends.parquet. Kept columns:
     code, ex_date (除权除息日 -- the point-in-time anchor: a declared dividend counts only
-    once it has gone ex), dps (per-share pre-tax cash). Small batches only (a sector, not
-    the whole lake); manages its own session."""
+    once it has gone ex), dps (per-share pre-tax cash).
+
+    RESUMABLE like `pull_annual_profit`: completed codes checkpoint to
+    data/raw/dividend_pull_done.txt every 50 names; a code counts as done only if EVERY
+    year query succeeded, so failed codes stay eligible for the next run."""
     import baostock as bs
 
-    from ..io import atomic_to_parquet
+    from ..io import atomic_to_parquet, atomic_write_text
     from .sources import baostock_source as bss
 
-    rows = []
+    done_path = _done_path("dividend")
+    done: set[str] = (set(done_path.read_text(encoding="utf-8").split())
+                      if done_path.exists() else set())
+    table = (pd.read_parquet(DIVIDENDS_PARQUET) if DIVIDENDS_PARQUET.exists()
+             else pd.DataFrame(columns=["code", "ex_date", "dps"]))
+    todo = [c for c in codes if c not in done]
+    if done:
+        print(f"  resuming: {len(done)} codes already complete, {len(todo)} to go")
+
+    def checkpoint(frames: list[pd.DataFrame]) -> pd.DataFrame:
+        merged = pd.concat([table, *frames], ignore_index=True)
+        merged = (merged.drop_duplicates().sort_values(["code", "ex_date"])
+                        .reset_index(drop=True))
+        atomic_to_parquet(merged, DIVIDENDS_PARQUET, index=False)
+        atomic_write_text("\n".join(sorted(done)), done_path)
+        return merged
+
+    frames: list[pd.DataFrame] = []
+    failed: list[str] = []
+    n = len(todo)
     with bss.session():
-        for code in codes:
+        for i, code in enumerate(todo, 1):
+            code_rows, code_ok = [], True
             for year in years:
-                rs = bs.query_dividend_data(code=code, year=str(year), yearType="operate")
-                if rs.error_code != "0":
-                    raise RuntimeError(f"dividend query failed for {code}/{year}: "
-                                       f"{rs.error_code} {rs.error_msg}")
-                while rs.next():
-                    rows.append(dict(zip(rs.fields, rs.get_row_data())))
+                for attempt in range(4):
+                    try:
+                        rs = bs.query_dividend_data(code=code, year=str(year),
+                                                    yearType="operate")
+                        if rs.error_code != "0":
+                            raise RuntimeError(f"{rs.error_code} {rs.error_msg}")
+                        while rs.next():
+                            code_rows.append(dict(zip(rs.fields, rs.get_row_data())))
+                        break
+                    except Exception as exc:  # noqa: BLE001 -- retry the recoverable families
+                        msg = str(exc)
+                        recoverable = bss.is_session_error(msg) or bss.is_transport_error(msg)
+                        if attempt + 1 >= 4 or not recoverable:
+                            failed.append(f"{code}/{year}: {msg}")
+                            code_ok = False
+                            break
+                        time.sleep(2.0 ** attempt)
+                        _relogin_patiently(bss)
                 time.sleep(pause)
-    df = pd.DataFrame(rows)
-    out = pd.DataFrame({
-        "code": df["code"],
-        "ex_date": pd.to_datetime(df["dividOperateDate"], errors="coerce"),
-        "dps": pd.to_numeric(df["dividCashPsBeforeTax"], errors="coerce"),
-    }).dropna(subset=["ex_date"]).fillna({"dps": 0.0})
-    out = out.sort_values(["code", "ex_date"]).reset_index(drop=True)
-    atomic_to_parquet(out, DIVIDENDS_PARQUET, index=False)
-    return out
+            if code_ok:
+                if code_rows:
+                    frames.append(_dividend_rows(pd.DataFrame(code_rows)))
+                done.add(code)
+            if i % 50 == 0 or i == n:
+                table = checkpoint(frames)
+                frames = []
+                print(f"  ...{i}/{n} names ({len(failed)} failed queries)")
+    table = checkpoint(frames)
+    if failed:
+        print(f"  {len(failed)} (code, year) queries failed; first few: {failed[:5]}")
+        print("  the failed codes are NOT checkpointed -- re-run to retry them")
+    return table
 
 
-def pull_raw_close(codes, start: str = "2015-01-01", end: str | None = None) -> pd.DataFrame:
-    """UNADJUSTED daily closes for a small set of codes -> raw_close.parquet (wide). The
-    dividend yield must divide by the price actually quoted that day; the adjusted lake
-    series would distort every historical yield."""
-    from ..io import atomic_to_parquet
+def pull_raw_close(codes, start: str = "2015-01-01", end: str | None = None,
+                   pause: float = 0.2) -> pd.DataFrame:
+    """UNADJUSTED daily closes -> raw_close.parquet (wide). The dividend yield must divide
+    by the price actually quoted that day; the adjusted lake series would distort every
+    historical yield.
+
+    RESUMABLE: completed codes checkpoint to data/raw/raw_close_pull_done.txt every 25
+    names; a code with no bars in the window still counts as pulled (in the done file,
+    absent from the panel). Codes already present as panel columns are skipped."""
+    from ..io import atomic_to_parquet, atomic_write_text
     from .sources import baostock_source as bss
 
     end = end or pd.Timestamp.now().strftime("%Y-%m-%d")
-    series = {}
+    done_path = _done_path("raw_close")
+    done: set[str] = (set(done_path.read_text(encoding="utf-8").split())
+                      if done_path.exists() else set())
+    panel = pd.read_parquet(RAW_CLOSE_PARQUET) if RAW_CLOSE_PARQUET.exists() else pd.DataFrame()
+    done |= set(panel.columns)
+    todo = [c for c in codes if c not in done]
+    if done:
+        print(f"  resuming: {len(done)} codes already complete, {len(todo)} to go")
+
+    def checkpoint(series: dict) -> pd.DataFrame:
+        merged = pd.concat([panel, pd.DataFrame(series)], axis=1).sort_index()
+        atomic_to_parquet(merged, RAW_CLOSE_PARQUET)
+        atomic_write_text("\n".join(sorted(done)), done_path)
+        return merged
+
+    series: dict = {}
+    failed: list[str] = []
+    n = len(todo)
     with bss.session():
-        for code in codes:
-            df = bss.daily_bars(code, start, end, adjustflag="3")
-            if not df.empty:
-                series[code] = df.set_index("date")["close"]
-            time.sleep(0.2)
-    panel = pd.DataFrame(series).sort_index()
-    atomic_to_parquet(panel, RAW_CLOSE_PARQUET)
+        for i, code in enumerate(todo, 1):
+            for attempt in range(4):
+                try:
+                    df = bss.daily_bars(code, start, end, adjustflag="3")
+                    if not df.empty:
+                        series[code] = df.set_index("date")["close"]
+                    done.add(code)
+                    break
+                except Exception as exc:  # noqa: BLE001 -- retry the recoverable families
+                    msg = str(exc)
+                    recoverable = bss.is_session_error(msg) or bss.is_transport_error(msg)
+                    if attempt + 1 >= 4 or not recoverable:
+                        failed.append(f"{code}: {msg}")
+                        break
+                    time.sleep(2.0 ** attempt)
+                    _relogin_patiently(bss)
+            time.sleep(pause)
+            if i % 25 == 0 or i == n:
+                panel = checkpoint(series)
+                series = {}
+                print(f"  ...{i}/{n} names ({len(failed)} failed)")
+    panel = checkpoint(series)
+    if failed:
+        print(f"  {len(failed)} codes failed; first few: {failed[:5]} -- re-run to retry")
     return panel
+
+
+def pull_holder_counts(codes, pause: float = 0.5) -> pd.DataFrame:
+    """Shareholder-count disclosure history per name (Eastmoney via akshare
+    `stock_zh_a_gdhs_detail_em`) -> holder_counts.parquet. Kept columns: code, stat_date
+    (统计截止日), pub_date (公告日期 -- the point-in-time anchor: the market learns the
+    count only at publication), holders (本次), prior_holders (上次).
+
+    RESUMABLE: completed codes checkpoint to data/raw/holder_pull_done.txt every 25 names;
+    an empty vendor response still counts as pulled."""
+    import akshare as ak
+
+    from ..io import atomic_to_parquet, atomic_write_text
+
+    done_path = _done_path("holder")
+    done: set[str] = (set(done_path.read_text(encoding="utf-8").split())
+                      if done_path.exists() else set())
+    table = (pd.read_parquet(HOLDER_COUNTS_PARQUET) if HOLDER_COUNTS_PARQUET.exists()
+             else pd.DataFrame(columns=["code", "stat_date", "pub_date",
+                                        "holders", "prior_holders"]))
+    todo = [c for c in codes if c not in done]
+    if done:
+        print(f"  resuming: {len(done)} codes already complete, {len(todo)} to go")
+
+    def checkpoint(frames: list[pd.DataFrame]) -> pd.DataFrame:
+        merged = pd.concat([table, *frames], ignore_index=True)
+        merged = (merged.drop_duplicates(["code", "stat_date"], keep="last")
+                        .sort_values(["code", "stat_date"]).reset_index(drop=True))
+        atomic_to_parquet(merged, HOLDER_COUNTS_PARQUET, index=False)
+        atomic_write_text("\n".join(sorted(done)), done_path)
+        return merged
+
+    frames: list[pd.DataFrame] = []
+    failed: list[str] = []
+    n = len(todo)
+    for i, code in enumerate(todo, 1):
+        for attempt in range(4):
+            try:
+                raw = ak.stock_zh_a_gdhs_detail_em(symbol=code.split(".")[1])
+                if not raw.empty:
+                    frames.append(pd.DataFrame({
+                        "code": code,
+                        "stat_date": pd.to_datetime(raw["股东户数统计截止日"],
+                                                    errors="coerce"),
+                        "pub_date": pd.to_datetime(raw["股东户数公告日期"], errors="coerce"),
+                        "holders": pd.to_numeric(raw["股东户数-本次"], errors="coerce"),
+                        "prior_holders": pd.to_numeric(raw["股东户数-上次"], errors="coerce"),
+                    }).dropna(subset=["stat_date", "pub_date", "holders"]))
+                done.add(code)
+                break
+            except Exception as exc:  # noqa: BLE001 -- vendor hiccups are worth a few retries
+                if attempt + 1 >= 4:
+                    failed.append(f"{code}: {exc}")
+                    break
+                time.sleep(5.0 * 2.0 ** attempt)
+        time.sleep(pause)
+        if i % 25 == 0 or i == n:
+            table = checkpoint(frames)
+            frames = []
+            print(f"  ...{i}/{n} names ({len(failed)} failed)")
+    table = checkpoint(frames)
+    if failed:
+        print(f"  {len(failed)} codes failed; first few: {failed[:5]} -- re-run to retry")
+    return table
+
+
+def load_holder_counts() -> pd.DataFrame:
+    """The holder_counts lake as a typed table (code, stat_date, pub_date, holders,
+    prior_holders)."""
+    df = pd.read_parquet(HOLDER_COUNTS_PARQUET)
+    df["stat_date"] = pd.to_datetime(df["stat_date"])
+    df["pub_date"] = pd.to_datetime(df["pub_date"])
+    return df
 
 
 def trailing_yield(dividends: pd.DataFrame, raw_close: pd.DataFrame) -> pd.DataFrame:
