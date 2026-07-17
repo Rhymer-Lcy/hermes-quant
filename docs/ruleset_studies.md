@@ -1,4 +1,4 @@
-# Friends' rulesets, tested: eight pre-registered studies
+# Friends' rulesets, tested: twelve pre-registered studies
 
 A friend who trades A-shares stated their system orally (about half a year of live experience;
 tested with their consent, no holdings shared). Every mechanically testable rule in it was
@@ -13,7 +13,9 @@ study code existed (for #7, before the event list existed). Follow-ups arrived a
 if-thens were supplied: [#9](https://github.com/Rhymer-Lcy/hermes-quant/issues/9) the
 dividend-yield band, [#10](https://github.com/Rhymer-Lcy/hermes-quant/issues/10) the
 ROE-slope anchor, [#11](https://github.com/Rhymer-Lcy/hermes-quant/issues/11) the
-ROE-decline exit; [#8](https://github.com/Rhymer-Lcy/hermes-quant/issues/8) tests a SECOND
+ROE-decline exit, [#12](https://github.com/Rhymer-Lcy/hermes-quant/issues/12) the
+high-dividend long hold, [#13](https://github.com/Rhymer-Lcy/hermes-quant/issues/13) the
+holder-count surge; [#8](https://github.com/Rhymer-Lcy/hermes-quant/issues/8) tests a SECOND
 friend's creed (attributed in its section). The friend's discretionary stock selection ("national policy 2–5 years out,
 consumption upgrade") is untestable without a point-in-time watchlist and was declared out of
 scope; verdicts bind the frozen operationalizations, not the person.
@@ -253,3 +255,46 @@ drifts most positive (+2.01%). Acting on the trigger would have systematically s
 bottoms. The instinct (deteriorating ROE matters) is not refuted; the timing (act on the
 annual print) is — a quarterly-frequency version is a different, unregistered claim.
 **REJECTED.**
+
+## #12 The high-dividend long hold — REJECTED (right direction, unproven; the price index flatters it)
+
+`python scripts/dividend_hold_study.py` — the first friend's allocation core ("high-yield
+names are the long-term book, expected to beat the SSE50/CSI300 at ~8%/yr"), extending #9
+from 41 banks to the full union: 15,870 cash-dividend events, trailing yield over the
+unadjusted close, top quintile ~156 names/day at 4.67% mean yield.
+
+| variant | wealth | bench | active/yr | t(month) |
+|---|---:|---:|---:|---:|
+| **top quintile vs EW universe NET (the verdict)** | 2.210 | 1.469 | **+3.08%** | **0.87** |
+| 2015–2019 / 2020–2026 | 1.398 / 1.581 | 1.010 / 1.454 | +6.02% / +0.82% | 1.92 / 0.14 |
+| yield ≥ 4%, ≥ 5.5%, top decile | 2.20–2.60 | 1.469 | +2.8% to +4.5% | 0.64–1.08 |
+
+Every variant positive, none significant — #9's verdict generalizes from banks to the whole
+market. The two descriptive reads (frozen as descriptive only) are the story: realized net
+CAGR **+7.12%/yr against his stated ~8% expectation** — the most accurate self-assessment
+any rule in this series has produced — and against the CSI300 PRICE index he actually
+watches, the edge inflates to +4.78%/yr, because the price index throws away the very
+dividends the sleeve collects. His experience ("it beats the index") is real; the benchmark
+in his head is the flattering one. **REJECTED.**
+
+## #13 The holder-count surge — REJECTED (a handful of episodes wearing 4,068 tickers)
+
+`python scripts/holder_surge_study.py` — the friend's distribution signal ("+20% holders in
+a quarter = chips sold to retail; consider selling"), on a new lake: 135,767 holder-count
+disclosures across 1,483 names, announcement-date aligned (Eastmoney; 118 names recovered
+via the vendor's F10 report after the DET interface came up short, 70 mostly-delisted names
+unavailable — both disclosed in the issue). 4,068 surge events in 1,157 names.
+
+| sample | N | mean | median | t(event) | t(month) |
+|---|---:|---:|---:|---:|---:|
+| **250d net (the verdict)** | 3,635 | **−2.49%** | −5.84% | −4.02 | **−0.09** |
+| surge mild / middle / severe | ~1,210 each | −0.50 / −3.26 / −3.71% | | | 0.61 / −0.08 / −0.66 |
+| 2015–2019 / 2020–2026 | 1,714 / 1,921 | −1.04% / −3.78% | | | 1.42 / −1.70 |
+
+The series' cleanest demonstration of why the monthly cluster is in every frozen bar: per-event
+t of −4.02, a dose-response in surge size — and t = −0.09 once event months share one vote.
+Holder counts surge together, in the few months retail floods in near local tops; the
+"observations" are market episodes, not independent trades. Direction consistently negative
+in every sub-sample (noted, not promoted). His illustration, NARI Tech (sh.600406): of five
+closed-window surges, three drifted UP (+5.1%, +23.7%, +10.9%) — the demonstration name
+contradicts the rule more often than it obeys it. **REJECTED.**
