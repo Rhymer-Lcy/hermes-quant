@@ -1,4 +1,4 @@
-# Friends' rulesets, tested: fourteen pre-registered studies
+# Friends' rulesets, tested: fifteen pre-registered studies
 
 A friend who trades A-shares stated their system orally (about half a year of live experience;
 tested with their consent, no holdings shared). Every mechanically testable rule in it was
@@ -17,7 +17,8 @@ ROE-decline exit, [#12](https://github.com/Rhymer-Lcy/hermes-quant/issues/12) th
 high-dividend long hold, [#13](https://github.com/Rhymer-Lcy/hermes-quant/issues/13) the
 holder-count surge, [#14](https://github.com/Rhymer-Lcy/hermes-quant/issues/14) the
 growth-to-dividend transition, [#15](https://github.com/Rhymer-Lcy/hermes-quant/issues/15)
-the IPO allottee's exit (a decision study, not a rule on trial);
+the IPO allottee's exit (a decision study, not a rule on trial),
+[#16](https://github.com/Rhymer-Lcy/hermes-quant/issues/16) its limit-ladder follow-up;
 [#8](https://github.com/Rhymer-Lcy/hermes-quant/issues/8) tests a SECOND
 friend's creed (attributed in its section). The friend's discretionary stock selection ("national policy 2–5 years out,
 consumption upgrade") is untestable without a point-in-time watchlist and was declared out of
@@ -339,3 +340,18 @@ day 60 and −16.4% (t −3.03) by day 120, the study's only significant cells. 
 no-limit window's end) is the single worst exit (−4.35%, t −3.35). The mega cohort
 (proceeds ≥ ¥10bn, N=7, no decision weight) spans −8% to +246% pops and −52% to +240%
 post-open paths: bigger is not safer, only wider.
+
+## #16 The limit ladder above the open — DECISION: nothing qualifies; sell the open stands
+
+`python scripts/ipo_limit_study.py` — the follow-up wish ("surely there is a gain level
+worth waiting for"): rest a limit x% above the day-1 open, close fallback if unfilled, x ∈
+{2…30%}. The day-1 high averages +15.3% above the open — and the close averages +0.29%:
+the peak exists, but a limit cannot harvest it, because unfilled days are exactly the days
+the fallback bleeds. No level is positive at monthly-clustered t > 2 on the full cohort;
+tight ladders (2–5%) are significantly NEGATIVE (cap the good days, eat the bad ones), and
+every ladder has been negative since 2022 — the 2019-2021 froth was the only era where
+waiting paid. Coherent sub-structure, noted not promoted: after a cold open, a ~15% limit
+is the strongest positive cell (+1.97%, t 3.20); after a hot open every ladder loses;
+broke issues lose at every level. The allottee's instruction is unchanged: a low-priced
+sell limit into the opening auction (the call auction clears at one price — a low limit
+guarantees the fill, not a worse price), broke issues included.
