@@ -1,4 +1,4 @@
-# Friends' rulesets, tested: fifteen pre-registered studies
+# Friends' rulesets, tested: sixteen pre-registered studies
 
 A friend who trades A-shares stated their system orally (about half a year of live experience;
 tested with their consent, no holdings shared). Every mechanically testable rule in it was
@@ -18,7 +18,8 @@ high-dividend long hold, [#13](https://github.com/Rhymer-Lcy/hermes-quant/issues
 holder-count surge, [#14](https://github.com/Rhymer-Lcy/hermes-quant/issues/14) the
 growth-to-dividend transition, [#15](https://github.com/Rhymer-Lcy/hermes-quant/issues/15)
 the IPO allottee's exit (a decision study, not a rule on trial),
-[#16](https://github.com/Rhymer-Lcy/hermes-quant/issues/16) its limit-ladder follow-up;
+[#16](https://github.com/Rhymer-Lcy/hermes-quant/issues/16) its limit-ladder follow-up,
+[#17](https://github.com/Rhymer-Lcy/hermes-quant/issues/17) the multi-day touch ladder;
 [#8](https://github.com/Rhymer-Lcy/hermes-quant/issues/8) tests a SECOND
 friend's creed (attributed in its section). The friend's discretionary stock selection ("national policy 2–5 years out,
 consumption upgrade") is untestable without a point-in-time watchlist and was declared out of
@@ -355,3 +356,18 @@ is the strongest positive cell (+1.97%, t 3.20); after a hot open every ladder l
 broke issues lose at every level. The allottee's instruction is unchanged: a low-priced
 sell limit into the opening auction (the call auction clears at one price — a low limit
 guarantees the fill, not a worse price), broke issues included.
+
+## #17 The multi-day touch ladder — DECISION: all 21 cells negative; sell the open stands
+
+`python scripts/ipo_touch_study.py` — the friend's repaired proposal ("find the gain level
+winners reliably touch within a week / month / quarter, rest a limit there"). The literal
+question dies first: the level EVERY winner touches does not exist above zero — the minimum
+window-max gain over the open is +0.0% at every window, and −24.5% over the issue price
+(broke issues stay broke for a quarter); the 10th percentile is +1–2%. The ladder itself:
+**every one of the 21 (window × level) cells is negative** vs selling at the open, most
+significantly (5d/20d tight ladders around −1.5%, t ≈ −3.3; hot-open tercile −3.4% to
+−9.5% per cell; broke issues negative everywhere; uniformly worse since 2022). Longer
+windows raise the touch probability while the fallback deteriorates underneath — a resting
+limit converts the right tail into a fixed +x and keeps the whole left tail: selling
+insurance against the good outcomes. The allottee's instruction is now triple-tested
+(#15 horizons, #16 intraday, #17 multi-day) and unchanged: sell into the opening auction.
