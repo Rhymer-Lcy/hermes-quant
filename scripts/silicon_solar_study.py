@@ -244,6 +244,7 @@ def build_report(panel: pd.DataFrame) -> dict:
             "status": status,
             "silicon_exceeded_ref_since_registration": exceeded,
             "next_confirmed_peak_month": pk_month.strftime("%Y-%m") if pk_month else None,
+            "next_confirmed_peak_close": round(pk_val, 2) if pk_val is not None else None,
             "next_confirmed_peak_in_P1_window": in_window,
         },
     }
