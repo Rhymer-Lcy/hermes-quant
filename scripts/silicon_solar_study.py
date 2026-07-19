@@ -18,8 +18,8 @@ silicon/solar co-movement was examined.
                  descriptive only, and contaminated (the friend named that episode after the fact).
   solar equity   CSI Solar Industry index 931151, monthly close (robustness: PV-ETF 515790)
   benchmark      CSI 300 (000300), monthly close -- price index vs price index, so no dividend
-                 asymmetry (the #12 trap is avoided by construction); resolved via a fallback
-                 chain of accessors at evaluation time (not needed for today's baseline)
+                 asymmetry (the #12 trap is avoided by construction); pulled every run via a
+                 csindex-led fallback chain and cached, entering the verdict only at the P2 step
   peak(t)        a month whose silicon close is the max of the centered 25-month window [t-12,t+12]
                  AND exceeds the registration-month close; confirmable only 12 months after t
   P1 timing      the next confirmed peak (first such t after the registration month) falls in
@@ -78,27 +78,23 @@ def _monthly_close(df: pd.DataFrame, date_col: str, close_col: str) -> pd.Series
 
 
 def _pull_hs300(today: str):
-    """CSI 300 monthly close via a fallback chain (the eastmoney push2 endpoint is flaky; the
-    csindex path and the ETF are the resilient alternatives). Returns (series, tag) or (None, None)
-    -- the benchmark is not needed until the P2 evaluation, so a miss today is non-fatal."""
+    """CSI 300 monthly close via a fallback chain led by the authoritative csindex.com.cn feed
+    (the eastmoney push2 endpoint is flaky). Returns (series, tag) or (None, None); the benchmark
+    enters the verdict only at the P2 step, so a miss on any run is non-fatal -- it is pulled every
+    run so its history accrues from registration rather than being fetched once, years out."""
     import akshare as ak
     attempts = [
-        ("csi000300", lambda: ak.stock_zh_index_daily_em(symbol="csi000300",
-                                                         start_date="20180101", end_date=today),
-         "date", "close"),
-        ("sh000300", lambda: ak.stock_zh_index_daily_em(symbol="sh000300",
-                                                       start_date="20180101", end_date=today),
-         "date", "close"),
-        ("index_zh_a_hist", lambda: ak.index_zh_a_hist(symbol="000300", period="daily",
-                                                      start_date="20180101", end_date=today),
-         "日期", "收盘"),
+        ("csindex", lambda: ak.stock_zh_index_hist_csindex(symbol="000300", start_date="20180101",
+                                                           end_date=today), "日期", "收盘"),
+        ("csi000300", lambda: ak.stock_zh_index_daily_em(symbol="csi000300", start_date="20180101",
+                                                        end_date=today), "date", "close"),
         ("510300_etf", lambda: ak.fund_etf_hist_em(symbol="510300", period="daily",
                                                   start_date="20180101", end_date=today,
                                                   adjust="qfq"), "日期", "收盘"),
     ]
     for tag, fn, dc, cc in attempts:
         try:
-            return _monthly_close(fn(), dc, cc), tag
+            return _monthly_close(_retry(fn, tries=2), dc, cc), tag
         except Exception:
             continue
     return None, None
@@ -119,7 +115,7 @@ def pull_panel() -> pd.DataFrame:
         cols["silicon"] = _monthly_close(si, "日期", "收盘价")
     except Exception:
         pass
-    for pull, dc, cc in [                    # csindex.com.cn is authoritative and resilient; the
+    for pull, dc, cc in [                    # solar: csindex.com.cn primary (authoritative, resilient)
         (lambda: ak.stock_zh_index_hist_csindex(symbol="931151", start_date="20180101",
                                                 end_date=today), "日期", "收盘"),
         (lambda: ak.stock_zh_index_daily_em(symbol="csi931151", start_date="20180101",
@@ -135,9 +131,9 @@ def pull_panel() -> pd.DataFrame:
         cols["solar_etf"] = _monthly_close(etf, "date", "close")
     except Exception:
         pass
-    # The CSI 300 benchmark enters only at the P2 evaluation (~2030). It is resolved lazily then
-    # via _pull_hs300 -- pulling it on every routine run just wastes retries on the flaky push2
-    # endpoint, so it is deliberately omitted from the baseline/tracking pull.
+    hs, _tag = _pull_hs300(today)            # CSI 300 benchmark: cached now so its history accrues
+    if hs is not None:                       # from registration, though it enters the verdict at P2
+        cols["hs300"] = hs
 
     fresh = pd.DataFrame(cols) if cols else None
     if fresh is None and cached is None:
@@ -200,7 +196,8 @@ def build_report(panel: pd.DataFrame) -> dict:
 
     if peaks:
         pk_month, pk_val = peaks[0]
-        in_window = pd.Timestamp(PEAK_WINDOW[0]) <= pk_month <= pd.Timestamp(PEAK_WINDOW[1] + "-28")
+        in_window = (pd.Timestamp(PEAK_WINDOW[0]) <= pk_month
+                     <= pd.Timestamp(PEAK_WINDOW[1]) + pd.offsets.MonthEnd(0))
         fwd = solar.index[solar.index >= pk_month + pd.DateOffset(months=WIN)]
         status = "PEAK_CONFIRMED_AWAITING_P2" if len(fwd) == 0 else "EVALUABLE"
     else:
@@ -217,7 +214,7 @@ def build_report(panel: pd.DataFrame) -> dict:
         "frozen_operationalization": {
             "silicon": "GFEX industrial-silicon futures main-continuous (SI0), monthly last close",
             "solar_equity": "CSI Solar Industry index 931151, monthly close",
-            "benchmark": "CSI 300 (000300), monthly close (resolved at P2 evaluation)",
+            "benchmark": "CSI 300 (000300), monthly close (cached from registration, used at P2)",
             "peak_def": "centered 25-month max [t-12,t+12] and > registration-month close",
             "P1_timing_window": list(PEAK_WINDOW),
             "P2_mechanism": "931151 minus 000300 return over the 12 months after the peak < 0",
