@@ -109,7 +109,7 @@ HS300 names (robustness).
 | primary GROSS (zero frictions) | −2.49% | −0.57 | −2.16 |
 | all PIT HS300 names | −1.66% | −0.37 | −1.53 |
 
-The pre-registered killer hypothesis — 做T frequency times stamp tax eats the edge — is wrong
+The pre-registered killer hypothesis — T+0 round-trip frequency times stamp tax eats the edge — is wrong
 in the most instructive way: total friction drag is 0.08%/yr (the box trades only ~7.9×
 account value in 11.5 years), and the strategy loses −2.49%/yr GROSS. The signal itself is
 backwards on these names: a quality name at the top of its 120-day box is more often breaking
@@ -395,7 +395,7 @@ high by 16 months, the reverse of the claimed lead — N=1, so a caveat, not a r
 
 The same friend's aside — "the companies that earn or save foreign exchange will do well" — was
 assessed for a cross-sectional overseas-revenue factor and **deferred on data quality**, not
-registered. The free region-revenue breakdown (`stock_zygc_em`, 按地区) has no consistent geography
+registered. The free region-revenue breakdown (`stock_zygc_em`, by region) has no consistent geography
 taxonomy, so a keyword normalizer misclassifies materially: a bank whose regions read
 head-office / north / south / east / west scores 100% overseas, while a utility whose overseas rows
 read Indonesia / Thailand / UK scores 0% — errors in both directions. A rigorous version needs a
