@@ -371,3 +371,34 @@ windows raise the touch probability while the fallback deteriorates underneath �
 limit converts the right tail into a fixed +x and keeps the whole left tail: selling
 insurance against the good outcomes. The allottee's instruction is now triple-tested
 (#15 horizons, #16 intraday, #17 multi-day) and unchanged: sell into the opening auction.
+
+## #18 A third friend — industrial silicon as the solar sector's single top-timing signal — FORWARD REGISTRATION (awaiting peak)
+
+`python scripts/silicon_solar_study.py` — a different friend (anonymized; not the two behind
+#2–#17) offered a macro call as a one-indicator rule: watch the industrial-silicon price; it
+peaks about four years out, and only then does the sector decline ("last time silicon took off,
+it hung solar on the mountain"). Unlike #2–#17 this is not a cross-sectional stock rule but a
+**macro timing claim with a single modern cycle**, so it yields no historical statistical verdict
+and is registered **prospectively** ([issue #18](https://github.com/Rhymer-Lcy/hermes-quant/issues/18)).
+Frozen: silicon = GFEX main-continuous `SI0` monthly close; solar = CSI Solar Industry `931151`
+monthly close; benchmark = CSI 300 (price-vs-price, so no dividend asymmetry — the #12 trap
+avoided by construction). A **peak** is a centered 25-month maximum above the registration level,
+confirmable 12 months late; **P1** the next peak lands in 2029-01…2031-12 (four years, ±1 year),
+**P2** solar underperforms CSI 300 over the 12 months after it. CONFIRMED iff P1 ∧ P2. Baseline
+(2026-07-19): silicon 8,320 (−53.5% off its 2022-12 series high), solar 931151 at 2,352 (−59.8%
+off its 2021-08 high). Why history is silent: one cycle; and the friend's cited episode is
+**unverifiable on free data** — solar equity topped 2021-08, but GFEX silicon futures began only
+2022-12, after that top; to the extent the cycle is observable, solar equity led silicon's observed
+high by 16 months, the reverse of the claimed lead — N=1, so a caveat, not a refutation. Status:
+**AWAITING_PEAK**; the verdict posts when the first post-2026 peak confirms (~2030–2032) or the
+2033-12 degenerate deadline passes.
+
+The same friend's aside — "the companies that earn or save foreign exchange will do well" — was
+assessed for a cross-sectional overseas-revenue factor and **deferred on data quality**, not
+registered. The free region-revenue breakdown (`stock_zygc_em`, 按地区) has no consistent geography
+taxonomy, so a keyword normalizer misclassifies materially: a bank whose regions read
+head-office / north / south / east / west scores 100% overseas, while a utility whose overseas rows
+read Indonesia / Thailand / UK scores 0% — errors in both directions. A rigorous version needs a
+total-revenue denominator plus a curated province/country dictionary with per-name review (or a
+vendor overseas-revenue field); below the bar for now, revisited only if the thesis warrants the
+build.
