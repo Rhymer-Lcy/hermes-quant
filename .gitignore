@@ -13,6 +13,11 @@
 *.joblib
 *.parquet
 
+# outward-facing publishing workspace: post drafts, cover art, rendered figures, account copy.
+# Kept local in full -- a draft should not be public here before it is published on the platform,
+# and the PNG/docx artifacts are regenerable from the sources that sit beside them.
+/publications/
+
 # editable-installed forks (separate repos, not vendored). Ignore everything under
 # external/ except the two tracked metadata files, so a loose file dropped there
 # (scratch log, token note) is not silently staged by `git add external/`.
