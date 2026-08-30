@@ -156,6 +156,29 @@ schtasks /Create /SC WEEKLY /D MON,TUE,WED,THU,FRI /ST 19:00 /TN hermes-paper ^
   (exit 75), so a run that lands mid-publication retries until publication completes. The 19:00 schedule
   already targets the post-publication window; this guard is the backstop.
 
+## Canonical record vs forward shadows
+
+`results/paper/` is the **canonical** forward record and the only one. It is what the deployed
+strategy actually did, and nothing may rewrite it.
+
+A *forward shadow* is a separate, frozen experiment racing the canonical record from a shared
+state: same engine, same signal, same costs, same tiers, differing in exactly one pre-registered
+parameter. The first is the D=5 rebalance-day shadow ([issue #22](d5_forward_shadow.md)), which
+forked from the canonical book at the 2026-08-28 close after
+[issue #21](rebalance_timing_study.md) found D=5 to be the historical champion but statistically
+uncertified.
+
+The hierarchy is strict, and enforced rather than merely documented:
+
+- shadows write only under `results/paper_shadow/<id>/`, never into `results/paper/`;
+- the shadow runner fingerprints the canonical tree before and after each run and raises if it moved;
+- `paper_live.ps1` invokes a shadow **only** after the canonical step exits 0, and **discards** its
+  exit code, so a shadow fault cannot delay, roll back or invalidate the canonical record;
+- a shadow never refreshes the lake -- the canonical run owns the data pull;
+- disabling a shadow (`HERMES_SHADOW_D5=0`) leaves the canonical path byte-identical.
+
+**A shadow's performance is evidence about a candidate, never a restatement of history.**
+
 ## Deferred (not in this stage)
 
 Corporate-action cash accounting (see above); a membership-aware suspension-vs-delisting
