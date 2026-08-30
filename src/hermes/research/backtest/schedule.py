@@ -120,3 +120,28 @@ def turnover_from_trades(trades: Iterable[dict]) -> float:
     """Total traded notional (both sides) from the engine's audit log, for the cost/turnover
     columns. Uses the executed price, so it includes slippage the same way the ledger does."""
     return float(sum(abs(t["shares"]) * t["price"] for t in trades))
+
+
+def splice_schedule(base: dict[int, int], candidate: dict[int, int], switch_after: int,
+                    dates: pd.DatetimeIndex | None = None) -> dict[int, int]:
+    """Baseline schedule up to and including bar `switch_after`, candidate strictly after it.
+
+    This is how a forward shadow forks from the canonical record (issue #22): both books share one
+    replayed history, and only executions AFTER the common-state bar differ. Keying the result by
+    execution bar makes a duplicate execution impossible by construction.
+
+    The one real hazard is a month straddling the switch -- if the baseline's execution for month M
+    falls on or before `switch_after` while the candidate's falls after it, that month would take
+    BOTH. With `dates` supplied this raises instead of silently double-rebalancing; the caller is
+    expected to switch after both candidates' executions for the month (as issue #22 does, forking
+    at a month-end bar).
+    """
+    out = {e: s for e, s in base.items() if e <= switch_after}
+    out.update({e: s for e, s in candidate.items() if e > switch_after})
+    if dates is not None:
+        months = [(dates[e].year, dates[e].month) for e in out]
+        if len(months) != len(set(months)):
+            dupes = sorted({m for m in months if months.count(m) > 1})
+            raise ValueError(f"splice would rebalance twice in month(s) {dupes}; "
+                             f"switch after every candidate execution for the straddled month")
+    return out
