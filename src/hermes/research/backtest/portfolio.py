@@ -196,7 +196,8 @@ def _score_backtest(price: pd.DataFrame, scores: pd.DataFrame, capital: float,
                     collect_trades: bool = False, limit_block: pd.DataFrame | None = None,
                     rebalance_freq: str = "M", initial_rebalance: bool = False,
                     stops: StopSpec | None = None, high: pd.DataFrame | None = None,
-                    low: pd.DataFrame | None = None) -> PortfolioResult:
+                    low: pd.DataFrame | None = None,
+                    schedule: dict[int, int] | None = None) -> PortfolioResult:
     """Engine: each month hold the top-`n_hold` names by `scores` (read at the month-end
     signal date, executed next trading day), with A-share frictions. Weighting is equal
     by default; `weight_asof` supplies an alternative intra-basket weighting (e.g.
@@ -208,7 +209,12 @@ def _score_backtest(price: pd.DataFrame, scores: pd.DataFrame, capital: float,
     every bar BEFORE any rebalance -- so a name is never stopped on the bar that bought it, and the
     proceeds sit in cash until the next rebalance. OFF (None) by default: the deployed book has no
     price stops, and with `stops=None` this function is bit-identical to its pre-stops behaviour.
-    `high`/`low` are only read by the "intraday" trigger mode."""
+    `high`/`low` are only read by the "intraday" trigger mode.
+    `schedule`: optional {exec_bar: signal_bar} override replacing the month-end rule, for the
+    calendar-timing study (research.backtest.schedule, issue #21). OFF (None) by default and the
+    None path is byte-identical to the pre-schedule engine; `rebalance_freq` semantics are
+    untouched. Entries are filtered to 0 <= signal < exec < n, so a schedule can never introduce
+    look-ahead or index past the panel."""
     costs = costs or AShareCosts()
     lot = costs.lot_size
     slip = costs.slip
@@ -218,10 +224,13 @@ def _score_backtest(price: pd.DataFrame, scores: pd.DataFrame, capital: float,
     dates = price.index
     n = len(dates)
 
-    periods = dates.to_period(rebalance_freq)          # "M" monthly (default), "Q" quarterly, "W" weekly
-    pos_of = {d: i for i, d in enumerate(dates)}
-    period_end = pd.Series(dates, index=dates).groupby(periods).max().tolist()
-    rebal_exec = {pos_of[sig] + 1: pos_of[sig] for sig in period_end if pos_of[sig] + 1 < n}
+    if schedule is None:                               # canonical path -- unchanged, byte-identical
+        periods = dates.to_period(rebalance_freq)      # "M" monthly (default), "Q" quarterly, "W" weekly
+        pos_of = {d: i for i, d in enumerate(dates)}
+        period_end = pd.Series(dates, index=dates).groupby(periods).max().tolist()
+        rebal_exec = {pos_of[sig] + 1: pos_of[sig] for sig in period_end if pos_of[sig] + 1 < n}
+    else:                                              # opt-in {exec_bar: signal_bar} override
+        rebal_exec = {e: s for e, s in schedule.items() if 0 <= s < e < n}
     if initial_rebalance and n:                        # allocate on the first bar (paper inception):
         rebal_exec.setdefault(0, 0)                    # read & execute that day's own signal at its close
 
@@ -344,7 +353,8 @@ def signal_portfolio_backtest(price: pd.DataFrame, signal: pd.DataFrame, capital
                               collect_trades: bool = False, limit_block: pd.DataFrame | None = None,
                               rebalance_freq: str = "M", initial_rebalance: bool = False,
                               stops: StopSpec | None = None, high: pd.DataFrame | None = None,
-                              low: pd.DataFrame | None = None) -> PortfolioResult:
+                              low: pd.DataFrame | None = None,
+                              schedule: dict[int, int] | None = None) -> PortfolioResult:
     """Top-N by an external `signal` panel (date x code), e.g. walk-forward ML
     out-of-sample predictions. `price` is the forward-adjusted close panel for exec/valuation.
     `exposure_asof`: optional callable(signal_date)->float in [0,1] scaling gross
@@ -363,4 +373,4 @@ def signal_portfolio_backtest(price: pd.DataFrame, signal: pd.DataFrame, capital
     uses the "intraday" trigger."""
     return _score_backtest(price, signal, capital, n_hold, costs, members_asof,
                            exposure_asof, weight_asof, rebalance_band, collect_trades, limit_block,
-                           rebalance_freq, initial_rebalance, stops, high, low)
+                           rebalance_freq, initial_rebalance, stops, high, low, schedule)
