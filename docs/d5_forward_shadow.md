@@ -90,10 +90,39 @@ Any failure exits nonzero **having written nothing**.
   record — verified by running the hook against a missing script.
 - `DEPLOYED` and `PAPER_INCEPTION` are unchanged.
 
+## Provenance: four SHAs, deliberately separate
+
+Schema v1 carried a single `created_at_commit = ca0d64b`. Forensics established what that actually
+meant: the manifest was written at **12:48:57** on 2026-08-30 while HEAD was `ca0d64b` (committed
+**12:18:01**), and every shadow source file was still an **uncommitted working-tree file** -- they
+landed at **12:53:43** as `8f92a01` / `0eb165a` / `03acb02` / `b1a1fd0`. So the field recorded
+"git HEAD at freeze time, on a dirty tree": the pre-implementation baseline, never the
+implementation. One field was carrying three meanings.
+
+Schema v2 separates them. The v1 value is preserved verbatim in `legacy_created_at_commit` and the
+original file kept as `manifest_v1_original.json`; nothing was discarded.
+
+| field | meaning |
+|---|---|
+| `preregistration_base_sha` | repository HEAD when issue #22 was registered and the manifest first frozen — `ca0d64b` |
+| `initial_implementation_sha` | the first committed revision at which the three blocking gates can be executed end to end — **`03acb02`**, which added `scripts/paper_shadow_d5.py` hosting them (`0eb165a` added the module but not the runner) |
+| `experiment_freeze_sha` | the clean, CI-green HEAD that is the audit baseline for all future forward evidence |
+| `runtime_code_sha` | recorded per **report**, not in the manifest: the HEAD that computed that particular run |
+
+`runtime_worktree_clean` accompanies the runtime SHA. **A persisted forward run refuses to proceed
+from a dirty worktree** — evidence that cannot be traced to a revision is worse than no evidence.
+A `--dry-run` may proceed, since it writes nothing. Either way the canonical D=1 record is
+unaffected: the shadow's exit code is discarded by `paper_live.ps1`.
+
+Provenance is code history, not strategy definition. A runtime SHA moves with maintenance; the
+candidate day does not. The migration changed no experiment parameter — candidate D=5, baseline
+D=1, inception 2026-08-28, `PAPER_INCEPTION`, strategy spec, cost model, tiers and schedule
+semantics all carried over unchanged, and `validate_manifest` refuses any frozen-field drift.
+
 ## The manifest
 
 `results/paper_shadow/d5/manifest.json` freezes the candidate day, the baseline day, the issue, the
-commit, both inceptions, the strategy spec, the cost model and the tier list, plus three explicit
+four provenance SHAs above, both inceptions, the strategy spec, the cost model and the tier list, plus three explicit
 declarations: the pre-inception counterfactual is not part of the forward record; the candidate
 parameters are frozen; `results/paper/` is canonical and must not be rewritten. Every run
 *validates* it and refuses to proceed on frozen-field drift. **A normal run never rewrites it** —
@@ -106,6 +135,12 @@ python scripts/paper_shadow_d5.py                # gates, then persist (no data 
 python scripts/paper_shadow_d5.py --dry-run      # gates + report, write nothing
 python scripts/paper_shadow_d5.py --as-of 2026-09-30
 ```
+
+**A note on the next execution dates.** D=1's next rebalance is expected on 2026-09-01 and the
+shadow's on 2026-09-07 (the 5th is a Saturday). These are **projections from the current trading
+calendar, not established facts**: the lake ends 2026-08-28, so no September bar exists yet, and a
+statutory closure could move either. The frozen rule is unchanged and is what governs — nominal
+anchor = the 5th, execution = the first real trading day at or after it, rolling forward.
 
 Daily automation: the existing `hermes-paper` scheduled task (weekdays 19:00 Asia/Shanghai) runs
 `paper_live.ps1`, which after a successful canonical step calls `paper_shadow_d5.ps1`. No second
