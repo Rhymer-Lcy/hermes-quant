@@ -26,7 +26,18 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest", "ruff"]
+# ruff is PINNED. CI installed whatever pip resolved, and the 0.15 -> 0.16 bump silently widened
+# ruff's DEFAULT rule set (adding I/BLE/DTZ/S/RUF/B/C4/UP/PERF/PL/ISC) while dropping E731 from it,
+# turning a green repository red on 74 pre-existing files without a line of code changing. The
+# explicit [tool.ruff.lint] select below makes the contract version-independent; the pin keeps the
+# local and CI toolchains identical as well. pytest is deliberately NOT pinned -- it has never
+# drifted the gate (Test has only ever been skipped behind a failing Lint, never failed).
+# statsmodels: required by scripts/rebalance_timing_study.py (Newey-West HAC), which
+# tests/test_rebalance_timing_gates.py loads by path. Undeclared since ca0d64b and latent the whole
+# time, because CI never reached the Test step behind the failing Lint -- a clean-environment run is
+# what surfaced it. It belongs in dev, not in `dependencies`: the library does not import it, only a
+# research script and the test that guards that script's verdict logic do.
+dev = ["pytest", "ruff==0.15.22", "statsmodels"]
 # vnpy etc. are installed editable from ./external (pip install -e external/vnpy),
 # kept out of `dependencies` so secondary-dev edits take effect.
 notebooks = ["jupyterlab"]
@@ -54,3 +65,13 @@ testpaths = ["tests"]
 [tool.ruff]
 line-length = 100
 target-version = "py312"
+
+[tool.ruff.lint]
+# The repository's ACTUAL long-standing lint contract, made explicit rather than inherited from
+# whatever "default" the installed ruff happens to ship. Verified empirically, not from memory:
+# ruff 0.15.22's default resolves to exactly this set (probe file: E731/F821/F841 caught by both
+# the bare default and by this explicit select, identically), and it is the set under which every
+# green CI run up to 5852bfe passed. Checked against both 0.15.22 and 0.16.5 on the current tree:
+# zero findings under either, so the gate no longer depends on the installed version.
+# Widening this is a deliberate, separately-audited decision -- not something a `pip install` does.
+select = ["E4", "E7", "E9", "F"]
