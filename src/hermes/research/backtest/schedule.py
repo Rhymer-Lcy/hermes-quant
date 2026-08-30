@@ -145,3 +145,59 @@ def splice_schedule(base: dict[int, int], candidate: dict[int, int], switch_afte
             raise ValueError(f"splice would rebalance twice in month(s) {dupes}; "
                              f"switch after every candidate execution for the straddled month")
     return out
+
+
+def anchor_rollforward_schedule(dates: pd.DatetimeIndex, calendar_day: int) -> dict[int, int]:
+    """Anchor on a calendar day, rolling forward across the month boundary if needed. Issue #23.
+
+    Differs from `calendar_rebalance_schedule` in exactly one respect, and it matters only for the
+    late-month anchors: that function CLAMPS to the month's last trading bar when the anchor falls
+    after it, whereas this one rolls forward to the first trading bar on or after the anchor even if
+    that lands in the NEXT calendar month. The two agree for D=1..23 on the current lake and diverge
+    for D=24..31 (D=31 on 81 bars), so issue #21's late-month results describe clamping only.
+
+    1. anchor = date(year, month, min(calendar_day, days_in_month)) -- D=31 resolves to Apr 30,
+       Feb 28, or Feb 29 in a leap year.
+    2. execution bar = the first trading bar >= anchor, from the real exchange calendar carried by
+       `dates`; weekends, Spring Festival and National Day roll forward naturally, across the month
+       boundary if that is where the next real bar is.
+    3. signal bar = the immediately preceding trading bar, strictly before execution.
+    4. at most one rebalance per ANCHOR MONTH; a bar already claimed by an earlier anchor month is
+       not claimed twice (which can happen when a long closure pushes two anchors onto one bar).
+    5. an anchor whose execution bar is the panel's first bar is skipped -- no signal bar exists.
+    """
+    if not 1 <= calendar_day <= 31:
+        raise ValueError(f"calendar_day must be in 1..31, got {calendar_day}")
+    dates = pd.DatetimeIndex(dates)
+    schedule: dict[int, int] = {}
+    for y, m in sorted({(d.year, d.month) for d in dates}):
+        first = pd.Timestamp(year=y, month=m, day=1)
+        anchor = pd.Timestamp(year=y, month=m, day=min(calendar_day, first.days_in_month))
+        pos = int(dates.searchsorted(anchor, side="left"))
+        if pos >= len(dates) or pos == 0:      # past the panel, or no preceding bar for a signal
+            continue
+        schedule.setdefault(pos, pos - 1)      # first anchor month to claim a bar keeps it
+    return schedule
+
+
+def schedule_audit_rows(dates: pd.DatetimeIndex, calendar_day: int,
+                        schedule: dict[int, int]) -> list[dict]:
+    """The per-month audit trail issue #23 freezes: what was requested, what it resolved to, and
+    whether the resolution rolled over a closure or across the month boundary."""
+    dates = pd.DatetimeIndex(dates)
+    by_exec = {}
+    for y, m in sorted({(d.year, d.month) for d in dates}):
+        first = pd.Timestamp(year=y, month=m, day=1)
+        anchor = pd.Timestamp(year=y, month=m, day=min(calendar_day, first.days_in_month))
+        pos = int(dates.searchsorted(anchor, side="left"))
+        if pos >= len(dates) or pos == 0 or pos in by_exec or pos not in schedule:
+            continue
+        by_exec[pos] = {
+            "anchor_month": f"{y}-{m:02d}", "requested_day": calendar_day,
+            "nominal_anchor_date": anchor.strftime("%Y-%m-%d"),
+            "signal_date": dates[schedule[pos]].strftime("%Y-%m-%d"),
+            "execution_date": dates[pos].strftime("%Y-%m-%d"),
+            "rolled_for_weekend_or_holiday": bool(dates[pos] != anchor),
+            "crossed_calendar_month": bool((dates[pos].year, dates[pos].month) != (y, m)),
+        }
+    return list(by_exec.values())
