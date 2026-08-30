@@ -21,6 +21,7 @@ candidate a differently-chosen book at inception and destroy the comparison.
 from __future__ import annotations
 
 import json
+import subprocess
 from dataclasses import asdict
 from datetime import date
 from pathlib import Path
@@ -44,7 +45,21 @@ CANDIDATE_DAY = 5
 BASELINE_DAY = 1
 SHADOW_ID = "d5"
 PREREG_ISSUE = "https://github.com/Rhymer-Lcy/hermes-quant/issues/22"
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
+
+#: Provenance SHAs, kept strictly separate from the experiment's frozen PARAMETERS. Code history is
+#: not strategy definition: a runtime SHA may move with maintenance, the candidate day may not.
+#:   PREREGISTRATION_BASE_SHA   repository HEAD when issue #22 was registered and the manifest first
+#:                              frozen -- 12:18:01, while the shadow sources were still uncommitted.
+#:                              This is what v1's `created_at_commit` actually recorded.
+#:   INITIAL_IMPLEMENTATION_SHA the first committed revision at which the shadow's three blocking
+#:                              gates can be executed end to end. 0eb165a added live/shadow.py but
+#:                              not the runner that hosts the gates; 03acb02 added
+#:                              scripts/paper_shadow_d5.py (gate_production_parity /
+#:                              gate_common_state / gate_no_lookahead) and its wrapper, so 03acb02
+#:                              is the first revision that can actually run and pass them.
+PREREGISTRATION_BASE_SHA = "ca0d64bb038bb26734bf2aa3274f19d452b0f09f"
+INITIAL_IMPLEMENTATION_SHA = "03acb02"
 
 SHADOW_ROOT = RESULTS_DIR / "paper_shadow"
 SHADOW_DIR = SHADOW_ROOT / SHADOW_ID
@@ -84,6 +99,24 @@ def _avg_names_held_since(trades, dates: pd.DatetimeIndex, since: pd.Timestamp) 
         if d >= since:
             counts.append(sum(1 for v in pos.values() if v > 0))
     return float(sum(counts) / len(counts)) if counts else 0.0
+
+
+def runtime_provenance() -> dict:
+    """The HEAD and worktree state of the code producing THIS run.
+
+    Recorded per report so a result years from now can be traced to the revision that computed it.
+    A persisted forward run on a dirty tree would be unauditable evidence, so the runner refuses
+    it; a dry run may proceed, since it writes nothing."""
+    def _git(*args):
+        try:
+            return subprocess.run(["git", *args], capture_output=True, text=True,
+                                  check=True).stdout.strip()
+        except Exception:                       # noqa: BLE001 -- provenance is best-effort
+            return ""
+    sha = _git("rev-parse", "HEAD")
+    status = _git("status", "--porcelain")
+    return {"runtime_code_sha": sha or "unknown",
+            "runtime_worktree_clean": bool(sha) and status == ""}
 
 
 class ShadowGateError(RuntimeError):
@@ -149,13 +182,22 @@ def assert_canonical_untouched(before: dict[str, tuple[int, int]]) -> None:
 
 # --- manifest ------------------------------------------------------------------------
 
+#: Fields a normal run may only VALIDATE. The two provenance anchors join them: the baseline and
+#: the implementation revision are historical facts, not settings, and a run must never rewrite
+#: them. `experiment_freeze_sha` is also frozen once written. `runtime_code_sha` is deliberately
+#: absent -- it belongs to the per-run report, not the manifest.
 FROZEN_FIELDS = ("shadow_id", "candidate_calendar_day", "baseline_calendar_day",
                  "shadow_inception_asof", "pre_registration_issue", "paper_inception",
-                 "capital_tiers", "strategy_spec", "cost_model")
+                 "capital_tiers", "strategy_spec", "cost_model",
+                 "preregistration_base_sha", "initial_implementation_sha")
 
 
 def build_manifest(commit: str, spec: DeployedStrategy = DEPLOYED,
-                   costs: AShareCosts | None = None) -> dict:
+                   costs: AShareCosts | None = None, *,
+                   experiment_freeze_sha: str | None = None,
+                   legacy_created_at_commit: str | None = None) -> dict:
+    """The frozen experiment definition plus its provenance. `commit` is the CURRENT HEAD, recorded
+    only as the freeze SHA on a first write; it is never allowed to overwrite a frozen field."""
     c = costs or AShareCosts()
     return {
         "schema_version": SCHEMA_VERSION,
@@ -165,7 +207,17 @@ def build_manifest(commit: str, spec: DeployedStrategy = DEPLOYED,
         "shadow_inception_asof": SHADOW_INCEPTION_ASOF,
         "pre_registration_issue": PREREG_ISSUE,
         "paper_inception": PAPER_INCEPTION,
-        "created_at_commit": commit,
+        # --- provenance (code history; NOT experiment parameters) ---
+        "preregistration_base_sha": PREREGISTRATION_BASE_SHA,
+        "initial_implementation_sha": INITIAL_IMPLEMENTATION_SHA,
+        "experiment_freeze_sha": experiment_freeze_sha or commit,
+        "legacy_created_at_commit": legacy_created_at_commit,
+        "provenance_note": (
+            "v1 carried a single `created_at_commit` = the git HEAD at freeze time, recorded on a "
+            "DIRTY tree while the shadow sources were still uncommitted. It denoted the "
+            "pre-implementation baseline, never the implementation. v2 separates the base, the "
+            "implementation, the freeze and the per-run runtime SHA; the v1 value is preserved "
+            "verbatim in legacy_created_at_commit."),
         "capital_tiers": list(ALL_TIERS),
         "strategy_spec": {k: v for k, v in asdict(spec).items()},
         "cost_model": {"commission_rate": c.commission_rate, "min_commission": c.min_commission,
@@ -186,7 +238,11 @@ def validate_manifest(path: Path, expected: dict) -> dict:
     if not path.exists():
         return expected
     on_disk = json.loads(path.read_text(encoding="utf-8"))
-    drift = {k: (on_disk.get(k), expected[k]) for k in FROZEN_FIELDS if on_disk.get(k) != expected[k]}
+    # A v1 file predates the two provenance anchors; their absence is a schema gap to migrate,
+    # not drift to refuse. Every other frozen field must still match exactly.
+    v1 = on_disk.get("schema_version", 1) < SCHEMA_VERSION
+    drift = {k: (on_disk.get(k), expected[k]) for k in FROZEN_FIELDS
+             if not (v1 and k not in on_disk) and on_disk.get(k) != expected[k]}
     if drift:
         raise ShadowGateError(f"manifest frozen-field drift {drift}; refusing to run. "
                               f"Retire the shadow deliberately instead of editing it.")
@@ -240,6 +296,7 @@ def shadow_step(capital: float, *, as_of: str | None = None, spec: DeployedStrat
         "candidate_calendar_day": candidate_day, "baseline_calendar_day": BASELINE_DAY,
         "pre_registration_issue": PREREG_ISSUE,
         "shadow_inception_asof": SHADOW_INCEPTION_ASOF,
+        **runtime_provenance(),
         "as_of": today.strftime("%Y-%m-%d"), "run_date": run_dt.strftime("%Y-%m-%d"),
         "lake_lag_days": lag, "fresh": lag <= 4,
         "capital_tier": int(capital),

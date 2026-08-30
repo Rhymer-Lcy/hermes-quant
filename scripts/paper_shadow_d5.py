@@ -29,10 +29,11 @@ import sys
 import pandas as pd
 
 from hermes.live.paper import live_step
-from hermes.live.shadow import (BASELINE_DAY, CANDIDATE_DAY, SHADOW_DIR, SHADOW_INCEPTION_ASOF,
-                                ShadowGateError, assert_canonical_untouched, build_manifest,
-                                build_panels, fingerprint_canonical, run_book, shadow_schedule,
-                                validate_manifest)
+from hermes.live.shadow import (BASELINE_DAY, CANDIDATE_DAY, SCHEMA_VERSION, SHADOW_DIR,
+                                SHADOW_INCEPTION_ASOF, ShadowGateError,
+                                assert_canonical_untouched, build_manifest, build_panels,
+                                fingerprint_canonical, run_book, runtime_provenance,
+                                shadow_schedule, validate_manifest)
 from hermes.live.strategy import ALL_TIERS, TIER_LABEL
 from hermes.paths import PAPER_DIR
 from hermes.research.backtest.schedule import calendar_rebalance_schedule
@@ -143,6 +144,16 @@ def main() -> None:
     gate_no_lookahead(panels)
     print("\n  all three gates PASSED -- shadow may be written")
 
+    # --- runtime provenance: a PERSISTED forward run must come from clean committed code ---
+    prov = runtime_provenance()
+    print(f"\n=== runtime provenance ===\n  code {prov['runtime_code_sha'][:8]}   "
+          f"worktree {'clean' if prov['runtime_worktree_clean'] else 'DIRTY'}")
+    if not prov["runtime_worktree_clean"] and not args.dry_run:
+        raise ShadowGateError(
+            "refusing to persist forward evidence from a DIRTY worktree -- the result could not be "
+            "traced to any revision. Commit (or stash) first, or use --dry-run. The canonical D=1 "
+            "record is unaffected either way.")
+
     manifest_path = SHADOW_DIR / "manifest.json"
     expected = build_manifest(head_commit())
     on_disk = validate_manifest(manifest_path, expected)
@@ -151,9 +162,26 @@ def main() -> None:
         if not manifest_path.exists():                  # frozen on first write, never rewritten
             manifest_path.write_text(json.dumps(expected, indent=2, ensure_ascii=False),
                                      encoding="utf-8")
-            print(f"\n  manifest FROZEN -> {manifest_path}")
+            print(f"  manifest FROZEN -> {manifest_path}")
+        elif on_disk.get("schema_version", 1) < SCHEMA_VERSION:
+            # ONE-TIME provenance migration. Permitted only while no post-inception bar exists, and
+            # it carries the v1 value forward verbatim rather than discarding it. The experiment
+            # definition is untouched -- validate_manifest already refused any frozen-field drift
+            # above, so reaching here means candidate, baseline, inception, spec, costs and tiers
+            # all still agree.
+            migrated = build_manifest(
+                head_commit(),
+                experiment_freeze_sha=head_commit(),
+                legacy_created_at_commit=on_disk.get("created_at_commit"))
+            (SHADOW_DIR / "manifest_v1_original.json").write_text(
+                json.dumps(on_disk, indent=2, ensure_ascii=False), encoding="utf-8")
+            manifest_path.write_text(json.dumps(migrated, indent=2, ensure_ascii=False),
+                                     encoding="utf-8")
+            print(f"  manifest MIGRATED v{on_disk.get('schema_version', 1)} -> v{SCHEMA_VERSION}; "
+                  f"v1 preserved as manifest_v1_original.json")
         else:
-            print(f"\n  manifest validated (frozen at commit {on_disk.get('created_at_commit', '?')[:8]})")
+            print(f"  manifest validated (frozen at {on_disk.get('experiment_freeze_sha', '?')[:8]}, "
+                  f"schema v{on_disk.get('schema_version')})")
 
     from hermes.live.shadow import shadow_step
     print(f"\nD=5 forward shadow (candidate {CANDIDATE_DAY} vs baseline {BASELINE_DAY}), "
