@@ -22,6 +22,22 @@ $logdir = Join-Path $repo "results\paper\logs"
 New-Item -ItemType Directory -Force -Path $logdir | Out-Null
 $log = Join-Path $logdir ("paper_{0:yyyyMMdd}.log" -f (Get-Date))
 
+# D=5 FORWARD SHADOW (issue #22) -- strictly subordinate to the canonical record.
+# Called ONLY after the canonical run exits 0, and its result is deliberately discarded: the shadow
+# is an experiment racing a historical champion that FAILED issue #21's battery, and it must never
+# be able to fail, delay or invalidate this task. It does not refresh the lake (the canonical run
+# already did) and writes only under results/paper_shadow/d5/.
+# Disable with HERMES_SHADOW_D5=0; the canonical path is unchanged either way.
+function Invoke-ShadowD5 {
+  param($repo, $py)
+  try {
+    $shadow = Join-Path $repo 'scripts\paper_shadow_d5.ps1'
+    if (Test-Path $shadow) {
+      & powershell -NoProfile -ExecutionPolicy Bypass -File $shadow | Out-Null
+    }
+  } catch { }        # a shadow fault is logged by its own wrapper and ignored here, by design
+}
+
 $maxAttempts = if ($env:HERMES_RETRY_MAX) { [int]$env:HERMES_RETRY_MAX } else { 24 }
 $delaySec    = if ($env:HERMES_RETRY_DELAY_SEC) { [int]$env:HERMES_RETRY_DELAY_SEC } else { 300 }
 $EX_TEMPFAIL = 75
@@ -58,6 +74,7 @@ for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
   Get-Content -LiteralPath $out, $err -Encoding UTF8 | Out-File -FilePath $log -Append -Encoding utf8
   Remove-Item -LiteralPath $out, $err -ErrorAction SilentlyContinue
 
+  if ($proc.ExitCode -eq 0) { Invoke-ShadowD5 $repo $py }   # canonical succeeded -> shadow (issue #22)
   if ($proc.ExitCode -ne $EX_TEMPFAIL) { exit $proc.ExitCode }   # success (0) or fatal (!=75) -> done
   if ($attempt -lt $maxAttempts) {
     "transient data failure (exit 75); retrying in $delaySec s (attempt $attempt/$maxAttempts) ..." |
