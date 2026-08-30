@@ -169,11 +169,16 @@ def test_persisting_the_shadow_does_not_touch_the_canonical_ledger(tmp_path):
 
 
 def test_canonical_write_protection_detects_a_change():
-    before = sh.fingerprint_canonical()
-    tampered = dict(before)
-    tampered[next(iter(tampered))] = (-1, -1)
+    """The guard must fire on any mismatch, including in a checkout with NO ledger.
+
+    `results/` is gitignored, so a CI runner has an empty canonical directory. An earlier version
+    took its baseline from `fingerprint_canonical()` and mutated the first key, which raised
+    StopIteration on an empty dict rather than exercising the guard -- the failure that turned CI
+    red once Lint stopped masking the Test step. Injecting a sentinel key makes the comparison
+    mismatch regardless of what is on disk."""
+    fabricated = {**sh.fingerprint_canonical(), "__sentinel_not_on_disk__": (-1, -1)}
     with pytest.raises(sh.ShadowGateError, match="WAS MODIFIED"):
-        sh.assert_canonical_untouched(tampered)
+        sh.assert_canonical_untouched(fabricated)
 
 
 # --- manifest -------------------------------------------------------------------------
