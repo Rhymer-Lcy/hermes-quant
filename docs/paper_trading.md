@@ -39,8 +39,15 @@ re-spells the 5:1 value/reversal blend, so they cannot diverge. `test_paper.py` 
    one consistent basis at a fraction of the cost; `replay` then recomputes the ledger wholesale from
    the seed, so the equity curve is self-consistent and re-running a date reproduces it. Forward-adjusted
    prices reinvest dividends via the adjustment, so the paper curve approximates a total-return account.
-   *Deferred refinement:* explicit corporate-action cash/tax accounting (dividend cash timing,
-   dividend tax) — second-order for a monthly large-cap book, required before live.
+   **That reinvestment is idealised, and the size of the idealisation is now measured rather than
+   asserted** (issue #24, [docs/dividend_tax_study.md](dividend_tax_study.md)): the adjusted series
+   reinvests every dividend at the ex-date close, instantly, PRE-TAX, in fractional shares. Applying
+   the statutory A-share differentiated dividend tax (Caishui [2015] No. 101) to the book's own FIFO
+   holding periods costs **+0.30 pp/yr** — about 3% of the strategy's net return, one-signed. So the
+   paper curve is a pre-dividend-tax figure for an individual investor, and a corporate holder is
+   exempt. The two remaining pieces — dividend cash timing and reinvestment lot friction — were
+   measured in the same study and are genuinely second-order (**±0.008 pp/yr**); that adjective was
+   previously applied to the tax as well, and for the tax it was wrong.
 
 2. **Suspension vs delisting at the right edge.** The engine force-liquidates a holding once its
    price series permanently ends (NaN after `last_valid_index`). Forward, a name suspended for
