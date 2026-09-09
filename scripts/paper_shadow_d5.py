@@ -70,7 +70,18 @@ def gate_production_parity(tiers) -> dict[int, dict]:
     return disk
 
 
-def gate_common_state(panels, disk, tiers) -> None:
+def canonical_at_fork(tiers) -> dict[int, dict]:
+    """The canonical production book AS OF THE FORK BAR, tier by tier.
+
+    GATE 2 compares a book truncated at the fork bar, so its reference must be the canonical book
+    at that same bar. The on-disk report is NOT that reference once the daily run has advanced it:
+    it holds the latest bar, and comparing the two dates made GATE 2 fail every day from the first
+    trading day after inception. Gate 1 already establishes that this production path reproduces
+    the on-disk ledger, so `live_step` at the fork bar is the ledger's own value there."""
+    return {cap: live_step(cap, as_of=SHADOW_INCEPTION_ASOF, persist=False) for cap in tiers}
+
+
+def gate_common_state(panels, ref_at_fork, tiers) -> None:
     """GATE 2: through the fork bar the shadow book IS the canonical book, tier by tier."""
     close, signal, asof_fn = panels
     fork = pd.Timestamp(SHADOW_INCEPTION_ASOF)
@@ -93,8 +104,9 @@ def gate_common_state(panels, disk, tiers) -> None:
               and pos_a == pos_b and abs(cash_a - cash_b) < 1e-6
               and len(a.trades) == len(b.trades)
               and abs(a.total_costs - b.total_costs) < TOL
-              and abs(float(a.equity.iloc[-1]) - disk[cap]["equity"]) < TOL
-              and pos_a == {k: int(v) for k, v in disk[cap]["positions"].items()})
+              and abs(float(a.equity.iloc[-1]) - ref_at_fork[cap]["equity"]) < TOL
+              and pos_a == {k: int(v) for k, v in ref_at_fork[cap]["positions"].items()}
+              and ref_at_fork[cap]["as_of"] == SHADOW_INCEPTION_ASOF)
         print(f"  {cap:>9,}: equity {float(a.equity.iloc[-1]):>14,.2f}  cash {cash_a:>12,.2f}  "
               f"names {len(pos_a):>2}  trades {len(a.trades):>3}  costs {a.total_costs:>9,.2f}"
               f"  -> {'PASS' if ok else 'FAIL'}")
@@ -138,9 +150,9 @@ def main() -> None:
     before = fingerprint_canonical()
     print(f"canonical results/paper fingerprinted: {len(before)} files (write-protected)\n")
 
-    disk = gate_production_parity(args.tiers)
+    gate_production_parity(args.tiers)
     panels = build_panels(args.as_of)
-    gate_common_state(panels, disk, args.tiers)
+    gate_common_state(panels, canonical_at_fork(args.tiers), args.tiers)
     gate_no_lookahead(panels)
     print("\n  all three gates PASSED -- shadow may be written")
 

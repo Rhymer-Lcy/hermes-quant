@@ -73,6 +73,16 @@ Each shadow report carries its own baseline comparator (`d1_equity_same_asof`,
    all seven tiers.
 2. **Common-state parity at the fork bar** — the shadow path reproduces the canonical ledger
    exactly through 2026-08-28: equity, cash, positions, per-name shares, trade count and costs.
+   Its reference is `live_step(as_of=2026-08-28)`, the canonical production book **at that bar**.
+   *Corrected 2026-09-09.* It originally read the on-disk `results/paper/report_<tier>.json`,
+   which the daily run advances: from the first trading day after inception the gate was comparing
+   a book truncated at the fork bar against a report at the latest bar, so it failed every day and
+   **the shadow recorded no forward evidence between 2026-08-31 and 2026-09-08**. The isolation
+   held exactly as designed throughout — gate 1 passed, nothing was written, the exit code was
+   discarded, and `results/paper/` stayed byte-for-byte identical — so nothing was corrupted; only
+   eight days of shadow observations were lost, and they are recoverable because both books are
+   recompute-from-seed. Gate 1 still compares the production path to the on-disk ledger at the
+   latest bar, so the chain "shadow == production at the fork" and "production == ledger" is intact.
 3. **No look-ahead** — every post-fork rebalance has `signal_bar < execution_bar`, reading only the
    PIT membership, PE, close and reversal history available at the signal bar.
 

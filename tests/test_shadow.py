@@ -10,6 +10,7 @@ import pandas as pd
 import pytest
 
 from hermes.live import shadow as sh
+from hermes.live.paper import live_step
 from hermes.live.strategy import ALL_TIERS, DEPLOYED
 from hermes.paths import PAPER_DIR
 from hermes.research.backtest.schedule import (assert_no_lookahead, calendar_rebalance_schedule,
@@ -113,7 +114,11 @@ def test_common_state_matches_the_canonical_ledger_in_every_tier():
     sp = sh.shadow_schedule(close.index)
     pre_sched = {e: s for e, s in sp.items() if close.index[e] <= FORK}
     for cap in ALL_TIERS:
-        ref = json.loads((PAPER_DIR / f"report_{cap}.json").read_text(encoding="utf-8"))
+        # The reference must be the canonical book AT THE FORK BAR. Reading the on-disk report
+        # compares a truncated book against whatever bar the daily run has since advanced the
+        # ledger to, so this began failing on the first trading day after inception.
+        ref = live_step(cap, as_of=sh.SHADOW_INCEPTION_ASOF, persist=False)
+        assert ref["as_of"] == sh.SHADOW_INCEPTION_ASOF, cap
         res = sh.run_book(close.loc[pre], signal.loc[pre], cap, asof_fn, pre_sched)
         assert float(res.equity.iloc[-1]) == pytest.approx(ref["equity"], abs=1e-9), cap
         assert sh._positions(res.trades) == {k: int(v) for k, v in ref["positions"].items()}, cap
