@@ -31,7 +31,7 @@ import pandas as pd
 from ..data.lake import load_close_panel
 from ..data.membership import MEMBERSHIP_PARQUET, membership_lookup
 from ..io import atomic_to_parquet
-from ..paths import PAPER_DIR, RESULTS_DIR
+from ..paths import PAPER_DIR, REPO_ROOT, RESULTS_DIR
 from ..research.backtest.frictions import AShareCosts
 from ..research.backtest.portfolio import signal_portfolio_backtest
 from ..research.backtest.schedule import (assert_no_lookahead, calendar_rebalance_schedule,
@@ -106,16 +106,23 @@ def runtime_provenance() -> dict:
 
     Recorded per report so a result years from now can be traced to the revision that computed it.
     A persisted forward run on a dirty tree would be unauditable evidence, so the runner refuses
-    it; a dry run may proceed, since it writes nothing."""
+    it; a dry run may proceed, since it writes nothing.
+
+    The repository is addressed with `git -C REPO_ROOT`, never via the process cwd. The scheduled
+    task registers no WorkingDirectory, so a cwd-relative `git` ran in System32, failed, and
+    reported the tree DIRTY when it was clean -- which silently blocked every persisted run.
+    `runtime_git_ok` now records whether git answered at all, so "unreadable" and "dirty" can
+    never again be the same signal."""
     def _git(*args):
         try:
-            return subprocess.run(["git", *args], capture_output=True, text=True,
-                                  check=True).stdout.strip()
+            return subprocess.run(["git", "-C", str(REPO_ROOT), *args],
+                                  capture_output=True, text=True, check=True).stdout.strip()
         except Exception:                       # noqa: BLE001 -- provenance is best-effort
-            return ""
+            return None
     sha = _git("rev-parse", "HEAD")
     status = _git("status", "--porcelain")
     return {"runtime_code_sha": sha or "unknown",
+            "runtime_git_ok": sha is not None and status is not None,
             "runtime_worktree_clean": bool(sha) and status == ""}
 
 

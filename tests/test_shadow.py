@@ -248,3 +248,25 @@ def test_shadow_step_refuses_a_lake_that_ends_before_inception():
                          columns=["x"])
     with pytest.raises(sh.ShadowGateError, match="before the shadow inception"):
         sh.shadow_step(10_000, persist=False, panels=(close, close, lambda _d: {"x"}))
+
+
+def test_runtime_provenance_resolves_the_repo_regardless_of_cwd(tmp_path, monkeypatch):
+    """Regression: the scheduled task registers no WorkingDirectory, so a cwd-relative `git`
+    ran in System32, failed, and reported the tree DIRTY when it was clean -- which blocked
+    every persisted shadow run from 2026-08-31 to 2026-09-21 while all three gates passed."""
+    monkeypatch.chdir(tmp_path)
+    prov = sh.runtime_provenance()
+    assert prov["runtime_git_ok"] is True, "git must be addressed with -C REPO_ROOT, not via cwd"
+    assert prov["runtime_code_sha"] != "unknown"
+    assert len(prov["runtime_code_sha"]) == 40
+
+
+def test_unreadable_git_is_not_reported_as_a_dirty_worktree(monkeypatch):
+    """'git did not answer' and 'the tree has uncommitted changes' are different states and must
+    not collapse into one flag -- collapsing them is what made the failure invisible."""
+    monkeypatch.setattr(sh.subprocess, "run",
+                        lambda *a, **k: (_ for _ in ()).throw(FileNotFoundError("no git")))
+    prov = sh.runtime_provenance()
+    assert prov["runtime_git_ok"] is False
+    assert prov["runtime_code_sha"] == "unknown"
+    assert prov["runtime_worktree_clean"] is False
