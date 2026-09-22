@@ -197,7 +197,9 @@ def _score_backtest(price: pd.DataFrame, scores: pd.DataFrame, capital: float,
                     rebalance_freq: str = "M", initial_rebalance: bool = False,
                     stops: StopSpec | None = None, high: pd.DataFrame | None = None,
                     low: pd.DataFrame | None = None,
-                    schedule: dict[int, int] | None = None) -> PortfolioResult:
+                    schedule: dict[int, int] | None = None,
+                    allocator: str | None = None,
+                    alloc_log: list | None = None) -> PortfolioResult:
     """Engine: each month hold the top-`n_hold` names by `scores` (read at the month-end
     signal date, executed next trading day), with A-share frictions. Weighting is equal
     by default; `weight_asof` supplies an alternative intra-basket weighting (e.g.
@@ -304,7 +306,28 @@ def _score_backtest(price: pd.DataFrame, scores: pd.DataFrame, capital: float,
                     # (unfilled target slots stay cash), so a weighting scheme is compared
                     # on like terms -- only the split WITHIN the basket changes.
                     w = basket_weights(top, weight_asof, sd)
-                    desired = target_shares(gross, w, len(top) / n_hold, raw, slip, lot)
+                    if allocator is None:          # production path -- byte-identical
+                        desired = target_shares(gross, w, len(top) / n_hold, raw, slip, lot)
+                    elif allocator == "cwil":      # issue #25, research-only, opt-in
+                        from .lots import allocate
+                        desired = allocate(gross, w, len(top) / n_hold, raw, slip, lot,
+                                           costs, cash, positions, equity_now)
+                    else:
+                        raise ValueError(f"unknown allocator {allocator!r}")
+                    if alloc_log is not None:
+                        # Opt-in diagnostic (issue #25). Records the pre-trade state so BOTH
+                        # allocators can later be scored from the IDENTICAL book -- a controlled
+                        # comparison that a path-dependent A/B cannot give.
+                        alloc_log.append({
+                            "date": di, "signal_date": sd, "equity": float(equity_now),
+                            "cash": float(cash), "gross": float(gross),
+                            "scale": len(top) / n_hold,
+                            "weights": dict(w),
+                            "positions": dict(positions),
+                            "price": {c: float(raw[c]) for c in set(w) | set(positions)
+                                      if c in raw.index and not np.isnan(raw[c])},
+                            "desired": dict(desired),
+                        })
                     for code in list(positions.keys()):            # sell anything dropped from top
                         desired.setdefault(code, 0)
                     block_buy = block_sell = None
@@ -354,7 +377,9 @@ def signal_portfolio_backtest(price: pd.DataFrame, signal: pd.DataFrame, capital
                               rebalance_freq: str = "M", initial_rebalance: bool = False,
                               stops: StopSpec | None = None, high: pd.DataFrame | None = None,
                               low: pd.DataFrame | None = None,
-                              schedule: dict[int, int] | None = None) -> PortfolioResult:
+                              schedule: dict[int, int] | None = None,
+                              allocator: str | None = None,
+                              alloc_log: list | None = None) -> PortfolioResult:
     """Top-N by an external `signal` panel (date x code), e.g. walk-forward ML
     out-of-sample predictions. `price` is the forward-adjusted close panel for exec/valuation.
     `exposure_asof`: optional callable(signal_date)->float in [0,1] scaling gross
@@ -373,4 +398,5 @@ def signal_portfolio_backtest(price: pd.DataFrame, signal: pd.DataFrame, capital
     uses the "intraday" trigger."""
     return _score_backtest(price, signal, capital, n_hold, costs, members_asof,
                            exposure_asof, weight_asof, rebalance_band, collect_trades, limit_block,
-                           rebalance_freq, initial_rebalance, stops, high, low, schedule)
+                           rebalance_freq, initial_rebalance, stops, high, low, schedule,
+                           allocator, alloc_log)

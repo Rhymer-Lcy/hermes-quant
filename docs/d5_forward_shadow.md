@@ -79,14 +79,49 @@ Each shadow report carries its own baseline comparator (`d1_equity_same_asof`,
    a book truncated at the fork bar against a report at the latest bar, so it failed every day and
    **the shadow recorded no forward evidence between 2026-08-31 and 2026-09-08**. The isolation
    held exactly as designed throughout — gate 1 passed, nothing was written, the exit code was
-   discarded, and `results/paper/` stayed byte-for-byte identical — so nothing was corrupted; only
-   eight days of shadow observations were lost, and they are recoverable because both books are
-   recompute-from-seed. Gate 1 still compares the production path to the on-disk ledger at the
+   discarded, and `results/paper/` stayed byte-for-byte identical — so nothing was corrupted. This
+   fault alone accounted for 2026-08-31 to 2026-09-08; a second, unrelated fault then extended the
+   blackout to 2026-09-21 (see "The persistence outage" below). All of it is recoverable because
+   both books are recompute-from-seed. Gate 1 still compares the production path to the on-disk ledger at the
    latest bar, so the chain "shadow == production at the fork" and "production == ledger" is intact.
 3. **No look-ahead** — every post-fork rebalance has `signal_bar < execution_bar`, reading only the
    PIT membership, PE, close and reversal history available at the signal bar.
 
 Any failure exits nonzero **having written nothing**.
+
+## The persistence outage, and why the reconstructed bars are still prospective evidence
+
+**Prospectively specified, retrospectively reconstructed after an operational persistence outage.**
+
+The shadow wrote no output from **2026-08-31 to 2026-09-21** — the whole period between its
+inception and the first successful persisted run. Two independent operational faults, neither of
+them in the experiment's definition:
+
+1. *gate-2 date mismatch* (fixed 2026-09-09, `9ff221b`) — described above; it compared a book
+   truncated at the fork bar against a report the daily run had advanced.
+2. *provenance read from the process cwd* (fixed 2026-09-22, `526f512`) — `runtime_provenance()`
+   shelled out to `git` without pinning the repository, and the `hermes-paper` scheduled task
+   registers no `WorkingDirectory`, so git ran in `System32`, failed, returned an empty SHA, and the
+   runner read that as "dirty worktree" and refused to persist. All three blocking gates were
+   passing at the time; only the write was blocked. `runtime_git_ok` now separates "git did not
+   answer" from "the tree is dirty" so the two can never collapse again.
+
+Why the recovered bars are still forward evidence and not a backfill:
+
+* the experiment definition — candidate D=5, baseline D=1, `SHADOW_INCEPTION_ASOF = 2026-08-28`,
+  the objective, the tier list and the evaluation schedule — was frozen in issue #22 and committed
+  **before** any of the affected bars existed (`experiment_freeze_sha = 0fee47b`, 2026-08-30);
+* the engine is recompute-from-seed and deterministic, so a missed day is reproduced exactly rather
+  than re-decided; nothing was re-chosen with knowledge of the outcome;
+* no parameter, date or threshold was touched during or after the outage;
+* the canonical D=1 record was unaffected throughout: gate 1 passed every day, nothing was written,
+  `paper_live.ps1` discards the shadow's exit code, and `results/paper/` was verified byte-for-byte
+  identical (24 files, SHA256).
+
+What was genuinely lost is the *independent daily attestation* that each bar was computed on the
+day it occurred. That is a weaker audit property than the frozen definition, and it is recorded
+here rather than glossed: the numbers are reproducible and prospectively specified, but for
+2026-08-31 to 2026-09-21 they were written in one batch on 2026-09-21.
 
 ## Isolation, enforced rather than intended
 
