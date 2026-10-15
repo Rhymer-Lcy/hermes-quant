@@ -71,8 +71,11 @@ too liquid for the premium to differentiate.
 
 ## Caveats
 
-Equal-weight top-10 is crude; price-limit no-fill (no fill at the limit) is not modeled in
-this engine (cross-checked via RQAlpha); costs ~ default 2.5 bps/5 bps; a single market
+Equal-weight top-10 is crude; price-limit no-fill (no fill at the limit) was not applied in
+the HS300 backtests reported here (the engine's `limit_block` is opt-in and off by default),
+and the one historical
+RQAlpha cross-check did not isolate its effect ([engine_validation.md](engine_validation.md));
+costs ~ default 2.5 bps/5 bps; a single market
 regime/period; turnover is not
 penalized; and size (market cap) is not in this single-factor set (it was reconstructed
 free from the lake and evaluated separately in [risk_control.md](risk_control.md) A4, and

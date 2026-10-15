@@ -18,14 +18,21 @@ strongest pairing, though neither is usable as-is:
   the broadest open-source A-share **live** path; the only candidate spanning
   backtest→paper→live with one strategy callback. Its CTA backtester is futures-style and
   does not model stamp tax / T+1 / price-limit no-fill / 100-share lots / ¥5 minimum commission.
-- **RQAlpha** — the friction gate. Models exactly those A-share frictions natively
-  (verified v6.1.x). A mandatory pass before any strategy advances.
+- **RQAlpha** — the planned independent friction gate. Models exactly those A-share
+  frictions natively (verified v6.1.x), but it is not an operational gate: it has been run
+  once, on 2026-06-19, for a summary-statistics cross-check of naive momentum
+  ([engine_validation.md](engine_validation.md)), and the deployed strategy has not been
+  through it.
 
 ## Three required changes
 
 1. **Gate every backtest through an A-share-faithful friction model** (RQAlpha or
    vnpy.alpha). vnpy's default backtester overstates P&L at ¥5k–¥30k accounts, where
    100-share lots, the ¥5 minimum commission, stamp tax, and T+1 dominate net returns.
+   Status: not in place as a gate. Backtests run in the hand-rolled engine
+   (`research/backtest/`), which models 100-share lots, the ¥5 minimum commission, stamp tax
+   and slippage, holds T+1 by construction for a monthly book, and offers price-limit no-fill
+   only as an opt-in (`limit_block`, off by default).
 2. **Start in the vnpy.alpha single-stack** for the first strategies. It reuses the same
    Alpha158 factor code from research to live, structurally eliminating the dominant silent
    failure mode, train/serve feature skew. Move to the full Qlib stack only when the

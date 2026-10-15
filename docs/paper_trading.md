@@ -190,6 +190,8 @@ The hierarchy is strict, and enforced rather than merely documented:
 
 Corporate-action cash accounting (see above); a membership-aware suspension-vs-delisting
 rule at the right edge for genuine multi-day suspensions (the acute same-day-publication case is now
-guarded — see Operations); price-limit no-fill in the engine (justified for liquid HS300;
-needed for a CSI 500 universe — see risk_control.md); the vnpy realtime gateway / `vnpy_paperaccount`
+guarded — see Operations); price-limit no-fill in the paper ledger (the backtest engine
+offers it as an opt-in, `limit_block`, used by the CSI 500 studies — see risk_control.md; the
+canonical ledger and the D5 shadow run without it, and how often it would bind on HS300 has
+not been measured); the vnpy realtime gateway / `vnpy_paperaccount`
 path (`execution/`), reserved for higher-frequency or true-live execution.

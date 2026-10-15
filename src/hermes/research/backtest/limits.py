@@ -6,8 +6,9 @@ AT THE CLOSE?", detected from the day's close vs the previous close and the boar
 
 `limit_flags` returns a (date x code) panel: +1 = at/above up-limit (block buys), -1 = at/below
 down-limit (block sells), 0 = normal, NaN = no bar. Feed it to signal_portfolio_backtest(
-limit_block=...). NOT needed for liquid HS300 large caps (limits rarely bind; cross-checked vs
-RQAlpha) and OFF by default there -- this is for the wider CSI500 / small-cap universe where
+limit_block=...). OFF by default, and not used by the HS300 strategies or the paper ledger;
+how often limits would bind there has not been measured, and the one RQAlpha cross-check did
+not isolate it (docs/engine_validation.md). It is for the wider CSI500 / small-cap universe where
 limit no-fill materially affects feasibility, and for limit-up EVENT detection (limit_up_study),
 where the rule must hold on every date, not just today.
 
