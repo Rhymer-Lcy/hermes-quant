@@ -143,10 +143,18 @@ def _warm_js_runtime() -> None:
     several pool workers constructing it at once abort the whole process
     (`Check failed: !IsConfigurablePoolInitialized()`, exit 0x80000003). Once one isolate
     has existed, concurrent construction is safe. Call this before starting any pool whose
-    workers may reach py_mini_racer."""
+    workers may reach py_mini_racer.
+
+    AKShare pins different packages per platform under the same module name: `mini-racer`
+    (>=0.12, has `close()`) on Windows, the older `py-mini-racer` 0.6 (no `close()`) on Linux,
+    so `close()` is called only where it is callable. Errors from construction or from
+    `close()` itself propagate."""
     import py_mini_racer
 
-    py_mini_racer.MiniRacer().close()
+    runtime = py_mini_racer.MiniRacer()
+    close = getattr(runtime, "close", None)
+    if callable(close):
+        close()
 
 
 def _build_per_bond(codes: Iterable[str], out_dir: Path,

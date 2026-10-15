@@ -50,3 +50,39 @@ def test_warm_failure_propagates_before_any_pull(tmp_path, monkeypatch):
 def test_warm_js_runtime_constructs_and_closes():
     pytest.importorskip("py_mini_racer")
     cbdata._warm_js_runtime()
+
+
+@pytest.mark.parametrize("has_close", [True, False])
+def test_warm_js_runtime_closes_only_where_supported(monkeypatch, has_close):
+    py_mini_racer = pytest.importorskip("py_mini_racer")
+    made = []
+
+    class Runtime:                       # mini-racer >=0.12 has close(); py-mini-racer 0.6 does not
+        def __init__(self):
+            made.append(self)
+            self.closed = False
+
+    if has_close:
+        Runtime.close = lambda self: setattr(self, "closed", True)
+    monkeypatch.setattr(py_mini_racer, "MiniRacer", Runtime)
+    cbdata._warm_js_runtime()
+    assert len(made) == 1 and made[0].closed is has_close
+
+
+def test_warm_js_runtime_propagates_construction_and_close_errors(monkeypatch):
+    py_mini_racer = pytest.importorskip("py_mini_racer")
+
+    class NoV8:
+        def __init__(self):
+            raise OSError("mini_racer.dll not loadable")
+
+    class BadClose:
+        def close(self):
+            raise RuntimeError("isolate teardown failed")
+
+    monkeypatch.setattr(py_mini_racer, "MiniRacer", NoV8)
+    with pytest.raises(OSError, match="not loadable"):
+        cbdata._warm_js_runtime()
+    monkeypatch.setattr(py_mini_racer, "MiniRacer", BadClose)
+    with pytest.raises(RuntimeError, match="teardown failed"):
+        cbdata._warm_js_runtime()
