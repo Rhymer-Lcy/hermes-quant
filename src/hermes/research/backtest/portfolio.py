@@ -17,10 +17,12 @@ Delisting/removal: a holding whose price series permanently ends is force-liquid
 once at its last real price net of fees and is never valued past that bar -- otherwise
 a dead name would re-enter P&L at a stale forward-filled price (survivorship bias).
 
-DOCUMENTED SIMPLIFICATIONS (not hidden): (1) price-limit no-fill is not modeled here (rare
-for a monthly rebalance on liquid HS300); see the RQAlpha cross-check. (2) Lot-sizing
-uses the forward-adjusted price LEVEL (approximate at the smallest tiers; cross-check confirms it
-is second-order). Friction/feasibility tool, not validated alpha.
+DOCUMENTED SIMPLIFICATIONS (not hidden): (1) price-limit no-fill is opt-in (`limit_block`,
+OFF by default; the paper ledger runs without it), and how often it would bind on the HS300
+strategies has not been measured. (2) Lot-sizing uses the forward-adjusted price LEVEL
+(approximate at the smallest tiers); its effect has not been isolated. The one RQAlpha
+cross-check (naive momentum, 2026-06-19, summary statistics only) isolates neither -- see
+docs/engine_validation.md. Friction/feasibility tool, not validated alpha.
 """
 from __future__ import annotations
 

@@ -1,5 +1,5 @@
 """A-share transaction cost model. These frictions DOMINATE net returns at small
-accounts — the whole point of the friction gate is to make them explicit.
+accounts — the whole point of this cost model is to make them explicit.
 
 Retail defaults, mid-2026:
   - commission:    2.5 bps (0.025%), minimum ¥5 per trade
@@ -13,8 +13,10 @@ regulator handling and supervision fees (handling fee ~0.341 bps + securities su
 fee ~0.2 bps ≈ 0.541 bps round-trip) that brokers collect bundled into commission -- so net
 commission is ~1.96 bps + regulatory fees. We do NOT add the regulatory fees again on top
 (double-counting). 2.5 bps all-in is a conservative retail level (many accounts negotiate
-1.5-2 bps). NOT modeled: price-limit no-fill (rare for a monthly HS300 rebalance;
-cross-checked in RQAlpha, which does model it) -- see docs/engine_validation.md.
+1.5-2 bps). NOT modeled here: price-limit no-fill. The backtest engine offers it as an
+opt-in (`limit_block`, OFF by default), and how often it would bind on the HS300 strategies
+has not been measured. The one RQAlpha cross-check (naive momentum; RQAlpha does model
+no-fill) did not isolate this effect -- see docs/engine_validation.md.
 """
 from __future__ import annotations
 

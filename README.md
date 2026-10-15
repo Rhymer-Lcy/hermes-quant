@@ -3,9 +3,10 @@
 A-share (mainland China stock market) quantitative research, backtesting, and paper-trading system.
 Codename **Hermes**.
 
-> Status: the research pipeline is built and cross-validated — BaoStock historical
+> Status: the research pipeline is built — BaoStock historical
 > pull → friction-faithful, point-in-time (survivorship-free) backtest → factor and
-> walk-forward ML evaluation, cross-checked against RQAlpha (see docs/). The deployed
+> walk-forward ML evaluation, with one historical RQAlpha cross-check of naive momentum
+> (summary statistics only; see docs/engine_validation.md). The deployed
 > strategy (value with a light 1-month-reversal tilt) and the end-of-day paper-trading
 > ledger run forward on live data (see docs/paper_trading.md). Next milestone: small
 > live capital through a broker gateway, once the paper-trading record holds up.
@@ -25,13 +26,16 @@ open-source tool does both well for A-shares.
             └─────────────────────────────┘         └──────────────────────────┘
                          │
                          ▼
-            RQAlpha friction gate  (T+1 · price limit · stamp tax · ¥5 minimum commission · 100-share lots)
+            planned independent friction gate  (T+1 · price limit · stamp tax · ¥5 minimum commission · 100-share lots)
 ```
 
 A staged pipeline; a strategy advances only when the prior stage holds up:
 
-1. **Backtest** on historical data, offline. Every candidate must pass an
-   A-share-faithful friction model (RQAlpha or vnpy.alpha) before advancing. vnpy's
+1. **Backtest** on historical data, offline, in the hand-rolled engine, which models
+   100-share lots, the ¥5 minimum commission, stamp tax and slippage (T+1 holds by
+   construction for a monthly book; price-limit no-fill is opt-in). An independent-engine
+   friction gate (RQAlpha or vnpy.alpha) is planned, not in place: RQAlpha has been run once,
+   on naive momentum, and the deployed strategy has not been through it. vnpy's
    default CTA backtester is futures-style and overstates P&L at small accounts, where
    100-share lots, the ¥5 minimum commission, stamp tax, and T+1 dominate net returns;
    un-frictioned returns are not relied upon.
@@ -51,8 +55,9 @@ See [docs/architecture.md](docs/architecture.md) for the full stack rationale.
 
 **Built vs planned.** The research and paper-trading engine is hand-rolled in `src/hermes/`
 and depends on no trading framework; the diagram above is the *target* stack. The external
-frameworks are unmodified — **RQAlpha** is used only as an independent friction cross-check of
-the hand-rolled backtest (see docs/engine_validation.md), while **vnpy** (execution) and
+frameworks are unmodified — **RQAlpha** has been used once (2026-06-19) for a
+summary-statistics cross-check of naive momentum against the hand-rolled backtest, with known
+limitations (see docs/engine_validation.md), while **vnpy** (execution) and
 **Qlib** (ML research) are intended layers that are deferred and not yet used. Nothing under
 `external/` is forked with local changes.
 
