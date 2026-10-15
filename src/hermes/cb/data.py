@@ -135,6 +135,20 @@ def _pull_revisions(code: str) -> pd.DataFrame:
     return df.reset_index(drop=True)
 
 
+def _warm_js_runtime() -> None:
+    """Create (and close) one py_mini_racer.MiniRacer on the calling thread.
+
+    AKShare's Sina decoders build a fresh MiniRacer per call. The FIRST V8 isolate in a
+    process initialises PartitionAlloc's configurable pool without synchronisation, so
+    several pool workers constructing it at once abort the whole process
+    (`Check failed: !IsConfigurablePoolInitialized()`, exit 0x80000003). Once one isolate
+    has existed, concurrent construction is safe. Call this before starting any pool whose
+    workers may reach py_mini_racer."""
+    import py_mini_racer
+
+    py_mini_racer.MiniRacer().close()
+
+
 def _build_per_bond(codes: Iterable[str], out_dir: Path,
                     pull: Callable[[str], pd.DataFrame], what: str,
                     max_workers: int = _MAX_WORKERS, force: bool = False) -> dict[str, str]:
@@ -168,6 +182,8 @@ def _build_per_bond(codes: Iterable[str], out_dir: Path,
     todo = list(codes) if force else [c for c in codes if not (out_dir / f"{c}.parquet").exists()
                                       and not (out_dir / f"{c}.miss").exists()]
     failures: dict[str, str] = {}
+    if max_workers > 1 and todo:
+        _warm_js_runtime()
     with ThreadPoolExecutor(max_workers=max_workers) as pool_:
         for i, (code, err) in enumerate(pool_.map(pull_one, todo), 1):
             if err is not None:
