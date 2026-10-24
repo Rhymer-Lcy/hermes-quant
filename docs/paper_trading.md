@@ -146,6 +146,14 @@ schtasks /Create /SC WEEKLY /D MON,TUE,WED,THU,FRI /ST 19:00 /TN hermes-paper ^
   to `HERMES_RETRY_MAX` attempts spaced `HERMES_RETRY_DELAY_SEC` apart (default 24 × 300 s ≈ 2 h),
   self-healing without a manual re-trigger. A FATAL error (any other nonzero exit) returns
   immediately. Each run is recompute-from-seed, so retrying is safe.
+- **Kill a silent attempt**: the BaoStock client reads its socket with no timeout, so a stalled
+  server connection blocks an attempt forever (2026-10-22: 6.8 h until shutdown; 2026-10-24: a stack
+  dump showed the wait in `baostock/util/socketutil.py`). The wrapper runs Python unbuffered and
+  kills an attempt that writes nothing for `HERMES_ATTEMPT_IDLE_SEC` (default 1800 s), treating it as
+  exit 75. The trigger is silence, not duration: the pull prints every 50 symbols, so a slow run that
+  is still progressing is never killed. `HERMES_RETRY_BUDGET_SEC` (default 22 h) bounds the whole
+  task, so a run can never overlap the next day's (the task is registered with
+  `MultipleInstances=IgnoreNew`).
 - **Fail loud on a degraded pull**: `feed.update_daily_bars` aborts (no report written) if the
   BaoStock pull falls below 98% OK — a partial outage would otherwise leave a
   mixed-forward-adjusted-basis lake. It raises `BaoStockUnavailable` (exit 75), so the wrapper
