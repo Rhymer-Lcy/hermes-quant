@@ -7,7 +7,8 @@ scripts/probes/probe_cb_freedata.py:
     defaulted included -- with the underlying-stock code, issue size, listing date.
   - Sina daily bars (bond_zh_hs_cov_daily): whole-life OHLCV for dead and live bonds.
     The tradable price/volume record the study prices from.
-  - Eastmoney value analysis (bond_zh_cov_value_analysis): dated close / conversion-value /
+  - Eastmoney value analysis (RPTA_WEB_KZZ_LS, the source of AKShare's
+    bond_zh_cov_value_analysis, requested directly): dated close / conversion-value /
     premium series over each bond's whole life (conversion price point-in-time by
     construction). The double-low score input.
   - JSL revision log (bond_cb_adj_logs_jsl): explicit downward-revision records. A
@@ -49,13 +50,14 @@ _UNIVERSE_COLS = {
     "上市时间": "listing_date",
     "信用评级": "rating",         # today's snapshot, not point-in-time -- never a filter input
 }
-_PREMIUM_COLS = {
-    "日期": "date",
-    "收盘价": "close",
-    "纯债价值": "bond_floor",
-    "转股价值": "conv_value",
-    "纯债溢价率": "bond_premium",  # percent
-    "转股溢价率": "conv_premium",  # percent, e.g. 30.5 == 30.5%
+_PREMIUM_URL = "https://datacenter-web.eastmoney.com/api/data/get"
+_PREMIUM_FIELDS = {               # Eastmoney RPTA_WEB_KZZ_LS field -> lake column, in lake order
+    "DATE": "date",
+    "FCLOSE": "close",
+    "PUREBONDVALUE": "bond_floor",
+    "SWAPVALUE": "conv_value",
+    "PUREBONDOR": "bond_premium",  # percent
+    "SWAPOR": "conv_premium",      # percent, e.g. 30.5 == 30.5%
 }
 _REVISION_COLS = {
     "转债名称": "name",
@@ -115,10 +117,28 @@ def _pull_bars(code: str) -> pd.DataFrame:
 
 
 def _pull_premium(code: str) -> pd.DataFrame:
-    import akshare as ak
+    """The Eastmoney value-analysis series behind AKShare's bond_zh_cov_value_analysis, requested
+    directly and mapped BY FIELD NAME. AKShare 1.18.64 renames the response positionally, so when
+    the endpoint grew from 13 to 15 fields (first seen in the 2026-10-19 run) every pull failed
+    with a length mismatch. A missing field raises KeyError, so a future schema change shows up
+    as misses (and a degraded refresh) rather than as silently shifted columns; no rows at all is
+    a ValueError, the "source has nothing for this bond" case `_retry` does not retry."""
+    import requests
 
-    df = ak.bond_zh_cov_value_analysis(symbol=code).rename(columns=_PREMIUM_COLS)
-    df["date"] = pd.to_datetime(df["date"])
+    params = {"sty": "ALL", "token": "894050c76af8597a853f5b408b759f5d", "st": "date", "sr": "1",
+              "source": "WEB", "type": "RPTA_WEB_KZZ_LS", "filter": f'(zcode="{code}")',
+              "p": "1", "ps": "8000"}
+    resp = requests.get(_PREMIUM_URL, params=params, timeout=30)
+    resp.raise_for_status()
+    rows = (resp.json().get("result") or {}).get("data")
+    if not rows:
+        raise ValueError("no value-analysis rows")
+    raw = pd.DataFrame(rows)
+    missing = sorted(set(_PREMIUM_FIELDS) - set(raw.columns))
+    if missing:
+        raise KeyError(f"value-analysis fields missing: {missing}")
+    df = raw[list(_PREMIUM_FIELDS)].rename(columns=_PREMIUM_FIELDS)
+    df["date"] = pd.to_datetime(df["date"], errors="coerce").dt.normalize()
     num = [c for c in df.columns if c != "date"]
     df[num] = df[num].apply(pd.to_numeric, errors="coerce")
     return df.sort_values("date").reset_index(drop=True)
