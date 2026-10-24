@@ -16,16 +16,19 @@
 # manual re-trigger. A fatal error (any nonzero != 75) or success (0) returns immediately. Each python
 # run is idempotent (recompute-from-seed), so retrying is safe.
 #
-# WATCHDOG: an attempt that has not exited after HERMES_ATTEMPT_TIMEOUT_SEC (default 7200 s, about
-# twice the slowest complete run on record, 3380 s on 2026-08-26) is killed and treated as exit 75.
-# A hung attempt otherwise blocks forever: on 2026-10-22 one produced no output for 6.8 h, before
-# its first lake write, until the machine was shut down (most likely a stalled BaoStock socket; the
-# client sets no timeout). The task is registered with MultipleInstances=IgnoreNew, so a hang that
-# outlives the day would also suppress the next day's run. No attempt starts once
-# HERMES_RETRY_BUDGET_SEC (default 72000 s = 20 h) has elapsed, so even a series of hung attempts
-# ends within about 22 h. Python runs unbuffered so a killed attempt still leaves its partial
-# output in the log. Killing is safe: every lake and ledger write of the canonical run is atomic
-# and each run recomputes from the seed. The D=5 shadow runs after the attempt, outside the watchdog.
+# WATCHDOG: an attempt that writes no output (stdout or stderr) for HERMES_ATTEMPT_IDLE_SEC
+# (default 1800 s) is killed and treated as exit 75. The BaoStock client reads its socket with no
+# timeout, so a stalled server connection blocks forever: the 2026-10-22 run hung for 6.8 h until
+# the machine was shut down, and on 2026-10-24 a stack dump of a run stuck after 50 of 667 symbols
+# showed it waiting in baostock/util/socketutil.py send_msg on an established connection with no
+# CPU use. The trigger is silence, not total duration, so a slow run that is still progressing (the
+# slowest complete run on record took 3380 s, 2026-08-26) is never killed; the pull prints a line
+# every 50 symbols. HERMES_RETRY_BUDGET_SEC (default 79200 s = 22 h) bounds the whole task: no new
+# attempt starts and a running one is killed once it is spent. The task is registered with
+# MultipleInstances=IgnoreNew, so a run that outlived the day would also suppress the next day's.
+# Python runs unbuffered so the log shows where a killed attempt stopped. Killing is safe: every
+# lake and ledger write of the canonical run is atomic and each run recomputes from the seed. The
+# D=5 shadow runs after the attempt, outside the watchdog.
 $ErrorActionPreference = "Stop"
 $repo = Split-Path -Parent $PSScriptRoot
 $py = if ($env:HERMES_PYTHON) { $env:HERMES_PYTHON } else { "python" }
@@ -53,10 +56,23 @@ function Invoke-ShadowD5 {
 
 $maxAttempts = if ($env:HERMES_RETRY_MAX) { [int]$env:HERMES_RETRY_MAX } else { 24 }
 $delaySec    = if ($env:HERMES_RETRY_DELAY_SEC) { [int]$env:HERMES_RETRY_DELAY_SEC } else { 300 }
-$timeoutSec  = if ($env:HERMES_ATTEMPT_TIMEOUT_SEC) { [int]$env:HERMES_ATTEMPT_TIMEOUT_SEC } else { 7200 }
-$budgetSec   = if ($env:HERMES_RETRY_BUDGET_SEC) { [int]$env:HERMES_RETRY_BUDGET_SEC } else { 72000 }
+$idleSec     = if ($env:HERMES_ATTEMPT_IDLE_SEC) { [int]$env:HERMES_ATTEMPT_IDLE_SEC } else { 1800 }
+$budgetSec   = if ($env:HERMES_RETRY_BUDGET_SEC) { [int]$env:HERMES_RETRY_BUDGET_SEC } else { 79200 }
+$pollMs      = [Math]::Max(1000, [Math]::Min(15000, $idleSec * 250))   # a quarter of the idle limit
 $started     = Get-Date
 $EX_TEMPFAIL = 75
+
+# Bytes written so far to the attempt's redirect files, read through an open handle: the directory
+# entry's size lags while the child still holds the file open.
+function Get-OutputBytes {
+  param([string[]]$paths)
+  $n = 0
+  foreach ($p in $paths) {
+    $fs = [System.IO.File]::Open($p, 'Open', 'Read', 'ReadWrite')
+    try { $n += $fs.Length } finally { $fs.Dispose() }
+  }
+  $n
+}
 
 # Capture the child's output to a UTF-8 log with no stream-object corruption: PYTHONIOENCODING
 # makes Python emit UTF-8; Start-Process writes those raw bytes to temp files (no PowerShell
@@ -94,22 +110,33 @@ for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
   $proc = Start-Process -FilePath $py -ArgumentList "`"$script`"" `
     -NoNewWindow -PassThru -RedirectStandardOutput $out -RedirectStandardError $err
   $null = $proc.Handle           # hold the handle so ExitCode stays readable without -Wait
-  $timedOut = -not $proc.WaitForExit($timeoutSec * 1000)
-  if ($timedOut) {
+  $seen = -1; $lastOutput = Get-Date; $killed = $null
+  while (-not $proc.WaitForExit($pollMs)) {
+    try { $bytes = Get-OutputBytes $out, $err } catch { $bytes = $null }   # unreadable: assume progress
+    if ($null -eq $bytes -or $bytes -ne $seen) { $seen = $bytes; $lastOutput = Get-Date }
+    elseif (((Get-Date) - $lastOutput).TotalSeconds -ge $idleSec) {
+      $killed = "no output for $idleSec s"; break
+    }
+    if (((Get-Date) - $started).TotalSeconds -ge $budgetSec) {
+      $killed = "retry budget of $budgetSec s spent"; break
+    }
+  }
+  if ($killed) {
     & taskkill.exe /PID $proc.Id /T /F | Out-Null
     $proc.WaitForExit()
   }
   Get-Content -LiteralPath $out, $err -Encoding UTF8 | Out-File -FilePath $log -Append -Encoding utf8
   Remove-Item -LiteralPath $out, $err -ErrorAction SilentlyContinue
   $code = $proc.ExitCode
-  if ($timedOut) {
-    "attempt exceeded $timeoutSec s and was killed; treated as a transient failure (exit 75)." |
+  if ($killed) {
+    "attempt killed ($killed); treated as a transient failure (exit 75)." |
       Out-File -FilePath $log -Append -Encoding utf8
     $code = $EX_TEMPFAIL
   }
 
   if ($code -eq 0) { Invoke-ShadowD5 $repo $py }   # canonical succeeded -> shadow (issue #22)
   if ($code -ne $EX_TEMPFAIL) { exit $code }        # success (0) or fatal (!=75) -> done
+  if ($killed -like 'retry budget*') { break }
   if ($attempt -lt $maxAttempts) {
     "transient data failure (exit 75); retrying in $delaySec s (attempt $attempt/$maxAttempts) ..." |
       Out-File -FilePath $log -Append -Encoding utf8
