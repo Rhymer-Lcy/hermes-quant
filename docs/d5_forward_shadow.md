@@ -121,7 +121,9 @@ Why the recovered bars are still forward evidence and not a backfill:
 What was genuinely lost is the *independent daily attestation* that each bar was computed on the
 day it occurred. That is a weaker audit property than the frozen definition, and it is recorded
 here rather than glossed: the numbers are reproducible and prospectively specified, but for
-2026-08-31 to 2026-09-21 they were written in one batch on 2026-09-21.
+2026-08-31 to 2026-09-21 they were written in one batch at 2026-09-22T11:10+08:00, by a manual run
+three minutes after the fix `526f512` was committed. That run printed its run date as 2026-09-21,
+the machine's local (UTC-4) date; the scheduled run of 2026-09-21 had refused to persist.
 
 ## Isolation, enforced rather than intended
 
