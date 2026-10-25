@@ -8,8 +8,9 @@ Two refreshes, run after market close on a trading day:
 
 INCREMENTAL refresh, re-base-safe: forward-adjusted prices are RE-BASED across the entire history
 whenever a dividend/split occurs, so a blind append would mix two bases in one series. Instead each
-code appends only its new bars UNLESS its overlap bar's close changed on re-pull (which signals a
-re-base) -- those few names are re-pulled in full (see ingest.pull_universe_incremental). This keeps
+code appends only its new bars UNLESS any of its last ingest.REBASE_WINDOW_BARS stored closes changed
+on re-pull (which signals a re-base, including a dividend factor the vendor applied days after the
+ex-date bar) -- those names are re-pulled in full (see ingest.pull_universe_incremental). This keeps
 the whole lake on ONE consistent basis while turning the daily run from a ~40-min full re-pull into
 minutes (and a no-op re-run into seconds); live.paper then recomputes the ledger wholesale from the
 seed, so the equity curve stays self-consistent.

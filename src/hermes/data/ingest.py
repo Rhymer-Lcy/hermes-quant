@@ -97,6 +97,32 @@ def _is_rebased(old_close: float, new_close: float, rtol: float = 1e-4) -> bool:
     return abs(new_close - old_close) > max(1e-6, abs(old_close) * rtol)
 
 
+REBASE_WINDOW_BARS = 60   # stored bars re-checked per code on every incremental refresh
+
+
+def _window_rebased(stored: pd.DataFrame, fresh: pd.DataFrame, since: pd.Timestamp) -> bool:
+    """True if any stored bar dated `since` or later differs from the freshly pulled `fresh` window
+    (both frames carry datetime `date` and `close`), or is no longer served at all.
+
+    One overlap bar is not enough. BaoStock can publish an ex-date bar before it applies that
+    dividend's factor to the earlier history; the next refresh then compares a bar on or after the
+    ex-date, which the factor never touches, and appends onto a stale basis for good. The
+    2026-10-24 audit found 346 of 643 HS300-union series in that state, each dividend recorded as a
+    price drop. Re-checking the last REBASE_WINDOW_BARS stored bars catches a factor that lands up
+    to REBASE_WINDOW_BARS - 2 trading days after its ex-date bar was stored (the window must still
+    hold the bar before the ex-date). Two NaN closes count as equal; NaN against a number does not."""
+    s = stored.loc[stored["date"] >= since].drop_duplicates("date").set_index("date")["close"]
+    f = fresh.drop_duplicates("date").set_index("date")["close"]
+    if not s.index.isin(f.index).all():
+        return True
+    for old, new in zip(s.to_numpy(dtype=float), f.reindex(s.index).to_numpy(dtype=float)):
+        if pd.isna(old) and pd.isna(new):
+            continue
+        if pd.isna(old) or pd.isna(new) or _is_rebased(old, new):
+            return True
+    return False
+
+
 def _latest_published_date(end: str) -> "pd.Timestamp | None":
     """BaoStock's latest available trading date (<= end), via a liquid reference (sh.600000). Used
     only to skip already-current codes on a re-run; returns None (optimization off) on any error."""
@@ -111,11 +137,12 @@ def _latest_published_date(end: str) -> "pd.Timestamp | None":
 
 def pull_universe_incremental(codes, start: str = BACKTEST_START, end: str = BACKTEST_END) -> pd.DataFrame:
     """Forward-adjusted daily bars, refreshed INCREMENTALLY -- the cheap daily path (the full
-    `pull_universe` is for the initial build). Per code: append only the new bars, unless the
-    forward-adjusted series re-based (dividend/split, detected via the overlap bar -- see
-    `_is_rebased`), in which case that one code is re-pulled in full. Codes already at the latest
-    published date are skipped. Same return shape as `pull_universe` (code, rows, status) plus a
-    diagnostic `mode`; manages its own session."""
+    `pull_universe` is for the initial build). Per code: re-pull a window starting at the
+    REBASE_WINDOW_BARS-th last stored bar and append only the new bars, unless the forward-adjusted
+    series re-based (dividend/split: any stored bar in the window changed -- see `_window_rebased`),
+    in which case that one code is re-pulled in full. Codes already at the latest published date
+    are skipped. Same return shape as `pull_universe` (code, rows, status) plus a diagnostic `mode`;
+    manages its own session."""
     ensure_dirs()
     out = PARQUET_DIR / "daily"
     out.mkdir(parents=True, exist_ok=True)
@@ -138,14 +165,15 @@ def pull_universe_incremental(codes, start: str = BACKTEST_START, end: str = BAC
                 if latest is not None and last >= latest:                   # already current -> skip
                     results.append({"code": code, "rows": len(existing), "status": "ok", "mode": "skip"})
                     continue
-                win = _daily_bars_reloginning(code, last.strftime("%Y-%m-%d"), end)
+                since = ex_dates.sort_values().iloc[-min(REBASE_WINDOW_BARS, len(ex_dates))]
+                win = _daily_bars_reloginning(code, since.strftime("%Y-%m-%d"), end)
                 if win.empty:
                     results.append({"code": code, "rows": len(existing), "status": "ok", "mode": "no-new"})
                     continue
                 win_dates = pd.to_datetime(win["date"])
-                old_o, new_o = existing.loc[ex_dates == last, "close"], win.loc[win_dates == last, "close"]
-                rebased = (len(old_o) == 0 or len(new_o) == 0
-                           or _is_rebased(float(old_o.iloc[0]), float(new_o.iloc[0])))
+                rebased = _window_rebased(pd.DataFrame({"date": ex_dates, "close": existing["close"]}),
+                                          pd.DataFrame({"date": win_dates, "close": win["close"]}),
+                                          since)
                 if rebased:                                                 # dividend/split -> full re-pull
                     df = _daily_bars_reloginning(code, start, end)
                     if not df.empty:
