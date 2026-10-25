@@ -125,6 +125,33 @@ here rather than glossed: the numbers are reproducible and prospectively specifi
 three minutes after the fix `526f512` was committed. That run printed its run date as 2026-09-21,
 the machine's local (UTC-4) date; the scheduled run of 2026-09-21 had refused to persist.
 
+## The data-basis restatement of 2026-10-25
+
+The shared price lake had been on a mixed forward-adjustment basis: many 2026 dividends were
+recorded as price drops (cause, audit and fix in docs/paper_trading.md, "Restatement of
+2026-10-25"). Both books read that lake, so both were restated when it was re-pulled in full on
+2026-10-25. As of 2026-10-23, return since the shadow inception and the excess over D=1 moved as
+follows:
+
+| tier | D=5 return before | after | excess vs D=1 before | after |
+|---:|---:|---:|---:|---:|
+| 10,000 | -1.38% | -1.00% | +0.05% | +0.05% |
+| 30,000 | -1.73% | -1.11% | +0.06% | +0.04% |
+| 50,000 | -2.35% | -1.61% | +0.63% | +0.62% |
+| 100,000 | -3.26% | -2.47% | +0.83% | +0.83% |
+| 500,000 | -5.29% | -4.54% | -0.51% | -0.59% |
+| 1,000,000 | -5.69% | -4.92% | -0.94% | -0.93% |
+| 5,000,000 | -5.92% | -5.15% | -1.13% | -1.13% |
+
+The comparison the experiment exists for, D=5 against D=1, barely moves (at most 0.08 percentage
+points) because both books were mispriced by the same dividends. The deployed top-10 is identical
+on both lakes on the shadow's two signal dates (2026-09-04, 2026-09-30); the names held after a
+rebalance differ at 7 of the 13 tier-rebalance points, all in the 30,000 to 500,000 tiers, where the
+corrected prices change which selected names fit into whole lots. No parameter, date, threshold or
+rule changed. The bars through 2026-10-23 were written on 2026-10-25; those of 2026-10-22 and
+2026-10-23 had already been written late, on 2026-10-24, because the canonical runs of those
+evenings hung or exited without a report, and the shadow only runs after a canonical success.
+
 ## Isolation, enforced rather than intended
 
 - The runner fingerprints every file under `results/paper/` before it starts and re-checks
