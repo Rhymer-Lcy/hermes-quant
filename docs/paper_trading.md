@@ -35,9 +35,12 @@ re-spells the 5:1 value/reversal blend, so they cannot diverge. `test_paper.py` 
    entire history whenever a dividend/split occurs, so naively appending new days would mix two
    adjustment bases in one series. `live.feed.update_daily_bars` therefore refreshes INCREMENTALLY
    (`ingest.pull_universe_incremental`): it appends each code's new bars but full-re-pulls any code
-   whose overlap bar's close changed on re-pull (the signal of a re-base), keeping the whole lake on
-   one consistent basis at a fraction of the cost; `replay` then recomputes the ledger wholesale from
-   the seed, so the equity curve is self-consistent and re-running a date reproduces it. Forward-adjusted
+   whose last 60 stored closes (`ingest.REBASE_WINDOW_BARS`) changed on re-pull (the signal of a
+   re-base), keeping the lake on one basis at a fraction of the cost; `replay` then recomputes the
+   ledger wholesale from the seed, so the equity curve is self-consistent and re-running a date on
+   the same lake reproduces it. Until 2026-10-25 only the last stored bar was compared, which missed
+   every dividend factor the vendor applied after the ex-date bar had been appended; the record was
+   restated on that date (see "Restatement of 2026-10-25" below). Forward-adjusted
    prices reinvest dividends via the adjustment, so the paper curve approximates a total-return account.
    **That reinvestment is idealised, and the size of the idealisation is now measured rather than
    asserted** (issue #24, [docs/dividend_tax_study.md](dividend_tax_study.md)): the adjusted series
@@ -170,6 +173,49 @@ schtasks /Create /SC WEEKLY /D MON,TUE,WED,THU,FRI /ST 19:00 /TN hermes-paper ^
   mid-publication run from mis-liquidating the not-yet-posted names. It too raises `BaoStockUnavailable`
   (exit 75), so a run that lands mid-publication retries until publication completes. The 19:00 schedule
   already targets the post-publication window; this guard is the backstop.
+
+## Restatement of 2026-10-25 (lake adjustment basis)
+
+**What was wrong.** A read-only audit on 2026-10-24 re-pulled every HS300-union series from
+2026-01-01 and compared it with the lake bar by bar: 346 of the 643 series with 2026 bars were on a
+mixed adjustment basis. 281 had missed exactly one 2026 dividend factor and 65 more than one; the
+last off-basis day of the single-factor codes fell in 2026-06 (47), 07 (130), 08 (34), 09 (51) and
+10 (19). The missing factor had a median of 1.36% and a maximum of 45.0%. In each such series the
+lake recorded the dividend as a price drop, so the record booked it as a loss. 8 of the 10 names
+held on 2026-10-23 were affected. Cause: the one-bar re-base check described in section 1.
+
+**What was done.** The check now compares a 60-bar window (`f488f0d`); on the 2026-10-24 lake it
+flagged exactly the 194 codes the audit predicted for that window and nothing else. Because older
+misses lie outside any window, the whole union was re-pulled in full on 2026-10-25. The re-pulled
+lake reproduced the audit code for code (the same 346 series rescaled, the other series unchanged)
+and changed no date and no non-price column. `scripts/audit_lake_basis.py` repeats the audit.
+
+**Effect on the record (as_of 2026-10-23, total return since inception and maximum drawdown):**
+
+| tier | return before | return after | max DD before | max DD after |
+|---:|---:|---:|---:|---:|
+| 10,000 | -2.28% | +0.59% | -3.82% | -3.91% |
+| 30,000 | -0.37% | +2.96% | -5.04% | -4.90% |
+| 50,000 | -1.98% | +1.41% | -6.53% | -5.72% |
+| 100,000 | -1.96% | +1.54% | -8.19% | -7.20% |
+| 500,000 | -2.04% | +1.76% | -9.18% | -8.08% |
+| 1,000,000 | -1.91% | +1.79% | -9.16% | -8.11% |
+| 5,000,000 | -1.91% | +1.85% | -9.19% | -8.15% |
+
+The deployed top-10 is identical on both lakes on every signal date (2026-06-18, 06-30, 07-31,
+08-31, 09-30), and the names held after each of the 33 tier-rebalance points are the same; what
+changed is the dividend accounting and the integer-lot share counts, which the engine sizes on
+forward-adjusted prices, so share counts differ from the inception fill onward. The
+pre-restatement ledgers and the mixed-basis lake are archived outside the repository.
+
+**What this restatement is and is not.** No parameter, date or rule changed; the same code and the
+same seed produce the restated record from corrected inputs. The record was always defined as the
+engine's output on the lake, and is so again. What it cannot recover is the daily attestation: the
+bars through 2026-10-23 were written on 2026-10-25, and those of 2026-10-22 and 10-23 were already
+written late, on 2026-10-24, after the scheduled runs of those evenings hung or exited without a
+report (see "Kill a silent attempt" under Operations). Research studies that read 2026 bars (the #24
+dividend-tax event sample runs to 2026-07-16; #25 uses the paper period) ran on the partly mixed
+lake; their frozen verdicts were not re-run and the effect on them is not quantified.
 
 ## Canonical record vs forward shadows
 
