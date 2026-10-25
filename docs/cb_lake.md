@@ -140,3 +140,10 @@ expected path, not a failure signal; judge at 12 months minimum. Replicating the
 needs roughly 30k CNY (20 names x one 10-bond lot at typical prices, with slack). The
 data chain is scrapers (Eastmoney/Sina): a failed evening self-heals by retry and by the
 next run's recompute-from-inception.
+
+Self-healing is not attestation. Through 2026-10-23, 31 of the record's 70 trading days (the
+inception day included) were written by a later run rather than on their own evening: the evening
+runs crashed intermittently in V8 from the first one until 2026-10-14 (fixed `d097625`, `6965066`),
+and every premium pull failed from 2026-10-19 to 2026-10-23 after an Eastmoney schema change (fixed
+`0dfbd26`). The October rebalance (signal 2026-09-30, executed 2026-10-08) is among them. The bars
+are reproducible from the frozen rules, but those days carry no same-evening record.
