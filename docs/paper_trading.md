@@ -53,13 +53,16 @@ re-spells the 5:1 value/reversal blend, so they cannot diverge. `test_paper.py` 
    previously applied to the tax as well, and for the tax it was wrong.
 
 2. **Suspension vs delisting at the right edge.** The engine force-liquidates a holding once its
-   price series permanently ends (NaN after `last_valid_index`). Forward, a name suspended for
-   the last few days is indistinguishable from a delisting and may be liquidated early. For HS300 large
-   caps, multi-day suspensions are rare and the effect is conservative (cash sits idle until the
-   next rebalance, never overstating return). A membership-aware rule (liquidate only when also
-   dropped from the index) is a documented future refinement. The acute case — a name merely not
-   yet posted during BaoStock's multi-hour publication window — never reaches this logic: it is
-   caught upstream by the evening schedule plus the publication-completeness guard (see Operations).
+   price series ends (NaN after `last_valid_index`), at the last real price. A suspension does not
+   trigger this: BaoStock serves a suspended day as a row carrying the previous close (37,802 rows
+   with zero or no volume across the 667 HS300-union files on 2026-10-26, none with an empty close),
+   so a suspended holding stays held and valued. What does trigger it at the right edge is an
+   ABSENT bar: a delisting (correctly), but also a pull that failed for that name or a bar not yet
+   published, where the exit would be a sell the market never printed. On the live path every such
+   exit (`right_edge_exits` in the report) must be a delisting BaoStock itself records
+   (`stock_basic` status 0, `outDate` on or before the session), or nothing is written and the run
+   exits 75 (`feed.assert_right_edge_safe`; see Operations). Past bars and the research backtests
+   keep the engine's rule unchanged.
 
 3. **Membership must stay current.** `live.feed.extend_membership` pulls HS300 month-end
    snapshots after the last stored one and appends (never rebuilds), adding new entrants to the
@@ -67,10 +70,12 @@ re-spells the 5:1 value/reversal blend, so they cannot diverge. `test_paper.py` 
    `update_daily_bars`.
 
 4. **Data-availability timing.** BaoStock posts a day's EOD bars over ~2-3 h after close, so the
-   task runs in the evening (~19:00). A run *during* publication is rejected by the completeness
-   guard (`feed.assert_publication_complete`): if fewer than 90% of current members carry the latest
-   date's bar, `refresh` raises and no report is written (retry once complete), so a half-published
-   day can never mis-liquidate the not-yet-posted names.
+   task runs in the evening. Which session the record must hold is decided in Beijing time from a
+   validated exchange calendar (`live.session`): today once its publication is due (18:00), else the
+   previous session. If the lake does not reach that session, or fewer than 90% of current members
+   carry its bar, `refresh` raises and no report is written (retry once published). The former
+   check measured coverage on the lake's own latest date, so a lake that had received nothing new
+   passed it.
 
 5. **Execution model is preserved.** The signal is read at the month-end close and executed at the next
    trading day's close, T+1, 100-share lots, full A-share frictions — identical to the backtest.
@@ -114,10 +119,14 @@ inception. The scheduled daily run is the forward paper record.
 ## Operations
 
 ```
-python scripts/paper_live.py                # refresh to today, step all tiers, report + persist
-python scripts/paper_live.py --no-refresh    # recompute on the current lake (monitoring)
-python scripts/paper_live.py --as-of 2026-03-31 --no-refresh   # historical replay to a date
+python scripts/paper_live.py                # refresh, verify the session, step all tiers, persist
+python scripts/paper_live.py --no-refresh    # recompute on the current lake; persists only if it holds the session
+python scripts/paper_live.py --as-of 2026-03-31 --no-refresh                  # replay, print only
+python scripts/paper_live.py --as-of 2026-03-31 --no-refresh --out-dir <dir>  # replay into <dir>
 ```
+
+A `--as-of` replay never writes `results/paper/` (it used to overwrite the canonical files with a
+ledger cut at that date); `--out-dir` may not point there.
 
 Outputs (gitignored) under `results/paper/`: `curve_<tier>.parquet`, `trades_<tier>.parquet`,
 `report_<tier>.json`, `logs/paper_<date>.log`. Every run is idempotent (recompute-from-seed),
@@ -161,18 +170,41 @@ schtasks /Create /SC WEEKLY /D MON,TUE,WED,THU,FRI /ST 19:00 /TN hermes-paper ^
   BaoStock pull falls below 98% OK — a partial outage would otherwise leave a
   mixed-forward-adjusted-basis lake. It raises `BaoStockUnavailable` (exit 75), so the wrapper
   retries; once the source recovers, the next pull re-pulls the whole union and self-heals.
-- **Fresh-vs-stale signal**: each report carries `run_date`, `lake_lag_days`, and `fresh`; a
-  holiday/weekend/source-lag run (which idempotently re-computes the prior bar) prints a `STALE`
-  banner rather than presenting itself as a fresh trading-day update.
+- **Session evidence in every report** (a schema extension; existing keys unchanged):
+  `evidence` is `current_session` (the lake holds the session due in Beijing time, verified against
+  a validated calendar), `historical_recompute` (a `--as-of` replay or `--backtest`, never written to
+  the canonical record), or, in the refused cases, `stale_source` / `incomplete_publication`, which
+  are raised and never written. `expected_session`, `session_date`, `session_coverage` and
+  `session_checked_at` (ISO 8601, +08:00) record what was checked; `right_edge_exits` lists names
+  the engine sold today without a bar today. `run_date` / `lake_lag_days` / `fresh` are kept for
+  compatibility and now count on the Beijing date; `fresh` (lag <= 4 calendar days) cannot tell a
+  stale replay from a current record and is superseded by `evidence`. Reports written before this
+  change lack the new keys.
+- **Calendar, not a reference stock**: the trade calendar comes from BaoStock `query_trade_dates`,
+  is validated (one row per day, no weekend session, no closure longer than 12 days) and is
+  cross-checked against the lake's own bar dates; a contradiction is fatal (exit 1). The
+  incremental pull no longer takes "the latest date" from sh.600000, whose staleness or suspension
+  used to freeze the whole universe silently; every code's 60-bar window is checked on every run,
+  which also catches a late adjustment factor on a same-day re-run.
+- **No sell the market did not print**: see section 2. A held name without a bar on the session is
+  written only as a BaoStock-recorded delisting; a failed pull or an unpublished bar blocks the
+  write (exit 75), even when the pull as a whole is above the 98% threshold. All tiers are computed
+  before any is written, so a refusal never leaves some tiers updated and others not.
+- **No lake write may drop a stored bar**: a full-series write (`ingest.write_full_series`, used by
+  `pull_universe` and the refresh's re-base re-pull) is refused if the new series lacks any date the
+  stored file holds, which blocks an old `end` (the research builders default to 2025-12-31), a
+  later `start`, or a vendor gap from truncating a current series. `scripts/ingest_union.py` has no
+  default end date any more (`--end` is required) and exits 1 if any code was not written.
 - **Atomic writes**: all parquet/JSON outputs (lake bars, membership, curves, reports) write to a
   temp file then `os.replace()`, so a crash mid-write cannot wedge later runs with a truncated file.
 - **No spurious rebalance at the right edge**: the engine's `+1 < n` guard and the current-month
   membership exclusion mean a non-trading-day run never fires a rebalance (verified).
-- **Reject incomplete publication**: BaoStock posts EOD bars over ~2-3 h, so `feed.assert_publication_complete`
-  aborts (no report written) if fewer than 90% of current members carry the latest date's bar — preventing a
-  mid-publication run from mis-liquidating the not-yet-posted names. It too raises `BaoStockUnavailable`
-  (exit 75), so a run that lands mid-publication retries until publication completes. The 19:00 schedule
-  already targets the post-publication window; this guard is the backstop.
+- **Reject incomplete publication**: BaoStock posts EOD bars over ~2-3 h, so the live refresh
+  aborts (no report written) if fewer than 90% of current members carry the due session's bar —
+  preventing a mid-publication run from mis-liquidating the not-yet-posted names. It raises
+  `BaoStockUnavailable` (exit 75), so a run that lands mid-publication retries until publication
+  completes. (`feed.assert_publication_complete`, the older check on the lake's own latest date, is
+  kept only for an explicit historical `refresh(end=...)`.)
 
 ## Restatement of 2026-10-25 (lake adjustment basis)
 
