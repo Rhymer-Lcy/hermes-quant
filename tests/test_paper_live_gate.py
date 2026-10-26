@@ -196,6 +196,19 @@ def test_calendar_contradicting_the_lake_is_fatal(env, capsys):
     assert env.canonical() == before
 
 
+def test_a_session_missing_from_the_lake_is_fatal(env, capsys):
+    """Every member lacks 2026-10-21 although the calendar says it was a session."""
+    before = seed_canonical(env)
+    env.lake_through(date(2026, 10, 26))
+    for f in env.daily.glob("*.parquet"):
+        df = pd.read_parquet(f)
+        df[df["date"] != pd.Timestamp("2026-10-21")].to_parquet(f, index=False)
+    env.clock(at(2026, 10, 26, 18, 30))
+    assert env.mod.run(TIERS) == 1
+    assert "sessions without bars [datetime.date(2026, 10, 21)]" in capsys.readouterr().err
+    assert env.canonical() == before
+
+
 def test_no_refresh_on_a_stale_lake_writes_nothing(env, capsys):
     before = seed_canonical(env)
     env.clock(at(2026, 10, 26, 18, 30))
