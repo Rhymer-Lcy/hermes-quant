@@ -20,6 +20,11 @@ Evidence (report field `evidence`):
 A --as-of replay used to overwrite results/paper/ with a ledger cut at that date; it now prints only,
 or writes to an explicit --out-dir that is not the canonical directory.
 
+Right edge: a held name with no bar on the session is liquidated by the engine at its last price
+(report field `right_edge_exits`). On the live path every such name must be a delisting BaoStock
+itself records (stock_basic status 0, outDate on or before the session); a failed pull or a bar not
+yet published blocks the write with exit 75 instead of recording a sell the market did not print.
+
 Scheduling (Windows Task Scheduler), weekdays in the Beijing evening, after the EOD publication is due
 (live.session.PUBLICATION_DUE). Use the wrapper scripts/paper_live.ps1 so stdout/stderr are captured to
 a timestamped log and the exit code is visible as the task's last result. It is safe to re-run: each
@@ -38,7 +43,7 @@ import pandas as pd
 from hermes.data.membership import MEMBERSHIP_PARQUET
 from hermes.data.sources.baostock_source import BaoStockUnavailable
 from hermes.live import session as ses
-from hermes.live.feed import current_members, refresh, verify_session
+from hermes.live.feed import assert_right_edge_safe, current_members, refresh, verify_session
 from hermes.live.paper import live_step
 from hermes.live.strategy import ALL_TIERS, DEPLOYED, PAPER_INCEPTION, TIER_LABEL
 from hermes.paths import BACKTESTS_DIR, PAPER_DIR
@@ -70,10 +75,12 @@ def main(argv: list[str] | None = None) -> int:
             ap.error("--out-dir applies only to a --as-of replay")
         out_dir, persist = None, True
     status = {"evidence": ses.HISTORICAL_RECOMPUTE} if not live else None
+    summary = None                                    # this run's pull summary (per-code status)
 
     if not args.no_refresh:
         print("refreshing lake from BaoStock (membership + forward-adjusted daily bars)...")
         result = refresh(end=args.as_of)
+        summary = result.summary
         if live:
             status = result.check.report_fields()
     elif live:                                        # recompute on the lake as it is: verify it first
@@ -90,10 +97,26 @@ def main(argv: list[str] | None = None) -> int:
         f"checked {status['session_checked_at']})" if status.get("session_date") else ""))
     print(f"  {'band':>6} {'tier':>9} {'as_of':>12} {'equity':>14} {'totRet':>8} {'maxDD':>8} "
           f"{'avgN':>6} {'pos':>4} {'todayTrades':>12}")
+    # Pass 1 computes every tier without writing. On the live path the canonical record is written
+    # (pass 2) only after the right-edge check passes for ALL tiers, so a refusal never leaves some
+    # tiers updated and others not; pass 2 must reproduce pass 1 exactly.
+    step = dict(as_of=args.as_of, inception=inception, out_dir=out_dir, status=status)
+    reports = {cap: live_step(cap, persist=persist and not live, **step) for cap in args.tiers}
+    if live:
+        exits = sorted({c for r in reports.values() for c in r["right_edge_exits"]})
+        if exits:
+            disp = assert_right_edge_safe(exits, status["session_date"], summary)
+            print(f"right-edge exits verified as delistings: {disp}")
+        clock = {"run_date", "lake_lag_days", "fresh"}        # may tick over midnight between passes
+        for cap in args.tiers:
+            r = live_step(cap, persist=True, **step)
+            if {k: v for k, v in r.items() if k not in clock} != \
+                    {k: v for k, v in reports[cap].items() if k not in clock}:
+                raise RuntimeError(f"tier {cap}: the written report differs from the checked one")
+            reports[cap] = r
     last_report = None
     for cap in args.tiers:
-        r = live_step(cap, as_of=args.as_of, inception=inception, out_dir=out_dir, persist=persist,
-                      status=status)
+        r = reports[cap]
         last_report = r
         print(f"  {TIER_LABEL.get(cap, '?'):>6} {cap:>9,} {r['as_of']:>12} {r['equity']:>14,.0f} "
               f"{r['total_return']:>+8.1%} {r['max_drawdown']:>8.1%} {r['avg_names_held']:>6.2f} "

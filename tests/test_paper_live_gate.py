@@ -73,11 +73,26 @@ class Env:
         mp.setattr(paper, "ensure_dirs", lambda: None)
         mp.setattr(feed, "extend_membership",
                    lambda end: (self.mdf, sorted(self.mdf["code"].unique()), []))
-        mp.setattr(feed, "update_daily_bars",
-                   lambda union, end: pd.DataFrame({"code": union, "rows": 1, "status": "ok", "mode": "append:+1"}))
+        self.pull_errors: set[str] = set()
+        self.delisted: dict[str, date] = {}
+        self.terminal_calls: list[list[str]] = []
+        self.terminal_override = None
+        mp.setattr(feed, "update_daily_bars", self.pull_summary)
+        mp.setattr(feed, "terminal_dates", self.terminal)
         mp.setattr(ss, "fetch_calendar", self.fetch)
         self.now = None
         self.calendar_override = None
+
+    def pull_summary(self, union, end):
+        return pd.DataFrame({"code": union, "rows": 1,
+                             "status": ["error: 10002007" if c in self.pull_errors else "ok" for c in union],
+                             "mode": "append:+1"})
+
+    def terminal(self, codes):
+        self.terminal_calls.append(list(codes))
+        if isinstance(self.terminal_override, Exception):
+            raise self.terminal_override
+        return {c: pd.Timestamp(self.delisted[c]) if c in self.delisted else None for c in codes}
 
     def fetch(self, now):
         self.calendar_calls += 1
@@ -86,13 +101,17 @@ class Env:
         start, end = now.date() - timedelta(days=40), now.date() + timedelta(days=7)
         return ss.validate_calendar(calendar_rows(start, end), start, end)
 
-    def lake_through(self, last: date, missing_on_last=0, extra_bar=None):
+    def lake_through(self, last: date, missing_on_last=0, extra_bar=None, absent=(), suspended=()):
+        """`absent`: codes with NO row on `last`; `suspended`: a row on `last` carrying the previous
+        close and no volume (how BaoStock serves a suspended day)."""
         for code, df in self.frames.items():
             df = df[df["date"] <= pd.Timestamp(last)].copy()
             if extra_bar is not None:
                 df = pd.concat([df, df.tail(1).assign(date=pd.Timestamp(extra_bar))], ignore_index=True)
-            if code in CODES[:missing_on_last]:
+            if code in CODES[:missing_on_last] or code in absent:
                 df = df[df["date"] < pd.Timestamp(last)]
+            if code in suspended:
+                df.loc[df.index[-1], ["close", "volume"]] = [df["close"].iloc[-2], np.nan]
             df.to_parquet(self.daily / f"{code.replace('.', '_')}.parquet", index=False)
 
     def clock(self, now):
@@ -222,3 +241,76 @@ def test_rerun_of_the_same_session_is_byte_identical(env):
     first = env.canonical()
     assert env.mod.run(TIERS) == 0
     assert env.canonical() == first
+
+
+# ---- right edge: a held name without a bar on the session ----------------------------------
+def held_name(env, tier=1000000):
+    held = sorted(env.report(tier)["positions"])
+    assert held, "the synthetic book must hold names for these tests to mean anything"
+    return held[0]
+
+
+def monday_with(env, **lake):
+    before = seed_canonical(env)
+    code = held_name(env)
+    env.lake_through(date(2026, 10, 26), **{k: [code] for k in lake})
+    env.clock(at(2026, 10, 26, 18, 30))
+    return before, code
+
+
+def test_held_name_pull_error_blocks_although_the_pull_is_above_98pct(env, capsys):
+    before, code = monday_with(env, absent=True)
+    env.pull_errors = {code}                       # 1 of 12 failed: the session gate alone passes
+    assert env.mod.run(TIERS) == 75
+    assert f"'{code}': 'pull_error'" in capsys.readouterr().err
+    assert env.canonical() == before and env.terminal_calls == []
+
+
+def test_held_name_without_a_bar_or_a_delisting_record_blocks(env, capsys):
+    before, code = monday_with(env, absent=True)
+    assert env.mod.run(TIERS) == 75
+    assert f"'{code}': 'missing_published_bar'" in capsys.readouterr().err
+    assert env.canonical() == before and env.terminal_calls == [[code]]
+
+
+def test_a_delisting_after_the_session_is_not_verified(env):
+    before, code = monday_with(env, absent=True)
+    env.delisted = {code: date(2026, 10, 27)}
+    assert env.mod.run(TIERS) == 75 and env.canonical() == before
+
+
+def test_a_failed_delisting_lookup_is_transient(env):
+    before, code = monday_with(env, absent=True)
+    env.terminal_override = BaoStockUnavailable("stock_basic query failed: 10002007")
+    assert env.mod.run(TIERS) == 75 and env.canonical() == before
+
+
+def test_a_verified_delisting_is_written_with_the_engines_exit(env):
+    before, code = monday_with(env, absent=True)
+    env.delisted = {code: date(2026, 10, 26)}
+    assert env.mod.run(TIERS) == 0
+    r = env.report(1000000)
+    assert r["right_edge_exits"] == [code] and code not in r["positions"]
+    sells = [t for t in r["today_trades"] if t["code"] == code]
+    last_close = env.frames[code].set_index("date")["close"].loc["2026-10-23"]
+    assert len(sells) == 1 and sells[0]["shares"] < 0 and sells[0]["price"] == pytest.approx(last_close)
+
+
+def test_a_suspended_held_name_is_kept_without_any_check(env):
+    before, code = monday_with(env, suspended=True)
+    assert env.mod.run(TIERS) == 0
+    r = env.report(1000000)
+    assert r["right_edge_exits"] == [] and code in r["positions"] and env.terminal_calls == []
+
+
+def test_classification_order():
+    summary = pd.DataFrame({"code": ["a", "b", "c", "d"], "status": ["error: x", "ok", "ok", "ok"]})
+    seen = []
+
+    def terminal(codes):
+        seen.append(codes)
+        return {"b": pd.Timestamp("2026-10-26"), "c": pd.Timestamp("2026-10-27"), "d": None}
+    disp = feed.classify_right_edge(["a", "b", "c", "d"], "2026-10-26", summary, terminal)
+    assert disp == {"a": "pull_error", "b": "verified_terminal", "c": "missing_published_bar",
+                    "d": "missing_published_bar"}
+    assert seen == [["b", "c", "d"]]                # a pull error is never looked up

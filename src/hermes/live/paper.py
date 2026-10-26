@@ -123,6 +123,14 @@ def live_step(seed_cash: float, as_of: str | None = None, *, spec: DeployedStrat
     # means the lake is stale (no new data ingested), surfaced as a banner by paper_live.
     run_dt = beijing_now().date()
     lake_lag = (run_dt - today.date()).days
+    # Right-edge exits: names the engine sold TODAY although they have no bar today. valuation_panel
+    # treats a series that ends as terminated and liquidates at the last real price, which is right
+    # for a delisting but fabricates a sell when today's bar is merely absent (a failed pull, a late
+    # publication). A suspension does not appear here: BaoStock serves a suspended day as a row with
+    # the previous close. The live driver must establish why each listed name has no bar before it
+    # writes the canonical record (live.feed.assert_right_edge_safe).
+    right_edge_exits = sorted({t["code"] for t in today_fills
+                               if t["shares"] < 0 and pd.isna(close.loc[today].get(t["code"]))})
     report = {
         "as_of": today.strftime("%Y-%m-%d"),          # last data bar (the strategy's clock)
         "run_date": run_dt.strftime("%Y-%m-%d"),       # wall-clock date this was computed
@@ -138,6 +146,7 @@ def live_step(seed_cash: float, as_of: str | None = None, *, spec: DeployedStrat
         "positions": dict(sorted(ledger.positions.items())),
         "today_trades": today_fills,
         "n_trades_total": len(res.trades),
+        "right_edge_exits": right_edge_exits,
         **(status or {}),
     }
     if persist:

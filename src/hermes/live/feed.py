@@ -145,6 +145,63 @@ def assert_publication_complete(members: list[str], min_coverage: float = 0.90) 
     return cov
 
 
+PULL_ERROR = "pull_error"
+MISSING_PUBLISHED_BAR = "missing_published_bar"
+VERIFIED_TERMINAL = "verified_terminal"
+
+
+def terminal_dates(codes: list[str]) -> dict[str, "pd.Timestamp | None"]:
+    """BaoStock's own delisting record per code: the outDate of a code whose status is 0
+    (delisted), else None. A query failure is transient (BaoStockUnavailable)."""
+    out = {}
+    with bss.session():
+        for code in codes:
+            rs = bs.query_stock_basic(code=code)
+            if rs.error_code != "0":
+                raise BaoStockUnavailable(f"stock_basic query failed for {code}: "
+                                          f"{rs.error_code} {rs.error_msg}")
+            rows = []
+            while rs.next():
+                rows.append(dict(zip(rs.fields, rs.get_row_data())))
+            row = rows[0] if rows else {}
+            out[code] = (pd.Timestamp(row["outDate"])
+                         if row.get("status") == "0" and row.get("outDate") else None)
+    return out
+
+
+def classify_right_edge(codes: list[str], session_date: "pd.Timestamp", summary: pd.DataFrame | None,
+                        terminal=None) -> dict[str, str]:
+    """Why each code has no bar on `session_date`: PULL_ERROR (this run's pull failed for it),
+    VERIFIED_TERMINAL (BaoStock records it delisted on or before the session), else
+    MISSING_PUBLISHED_BAR (fetched, no bar, no terminal record)."""
+    errors = set()
+    if summary is not None and len(summary):
+        errors = set(summary.loc[summary["status"] != "ok", "code"])
+    out = {c: PULL_ERROR for c in codes if c in errors}
+    rest = [c for c in codes if c not in out]
+    if rest:
+        ends = (terminal or terminal_dates)(rest)
+        for c in rest:
+            end = ends.get(c)
+            out[c] = (VERIFIED_TERMINAL if end is not None and end <= pd.Timestamp(session_date)
+                      else MISSING_PUBLISHED_BAR)
+    return out
+
+
+def assert_right_edge_safe(codes: list[str], session_date, summary: pd.DataFrame | None,
+                           terminal=None) -> dict[str, str]:
+    """Allow a right-edge exit only for a verified delisting. Any other disposition raises
+    BaoStockUnavailable (exit 75) so no fabricated sell reaches the canonical record."""
+    disp = classify_right_edge(codes, session_date, summary, terminal)
+    blocked = {c: d for c, d in disp.items() if d != VERIFIED_TERMINAL}
+    if blocked:
+        raise BaoStockUnavailable(
+            f"held name(s) without a {pd.Timestamp(session_date).date()} bar that the engine would "
+            f"liquidate at their last price: {blocked}; refusing to write a sell the market did not "
+            "print -- retry once the bar is published, or verify the delisting")
+    return disp
+
+
 @dataclass(frozen=True)
 class RefreshResult:
     mdf: pd.DataFrame
