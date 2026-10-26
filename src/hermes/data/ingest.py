@@ -52,7 +52,7 @@ def pull_universe(codes, start: str = BACKTEST_START, end: str = BACKTEST_END) -
             try:
                 df = _daily_bars_reloginning(code, start, end)
                 if not df.empty:
-                    atomic_to_parquet(df, out / f"{code.replace('.', '_')}.parquet", index=False)
+                    write_full_series(df, out / f"{code.replace('.', '_')}.parquet")
                 results.append({"code": code, "rows": len(df), "status": "ok"})
             except Exception as exc:  # noqa: BLE001 -- record and keep the batch going
                 results.append({"code": code, "rows": 0, "status": f"error: {exc}"})
@@ -61,6 +61,27 @@ def pull_universe(codes, start: str = BACKTEST_START, end: str = BACKTEST_END) -
             time.sleep(0.2)          # pace the batch: hammering triggers server-side throttling
                                      # (observed as a 1000200x cascade, eventually at login itself)
     return pd.DataFrame(results)
+
+
+class LakeWriteRefused(RuntimeError):
+    """A full-series write would have dropped bars the lake already holds."""
+
+
+def write_full_series(df: pd.DataFrame, path) -> None:
+    """Atomically replace one code's file with a freshly pulled FULL series, but only if the
+    replacement still contains every date the stored file holds. A pull with an earlier `end` (the
+    research builders default to BACKTEST_END = 2025-12-31), a later `start`, or a vendor gap would
+    otherwise overwrite a current series with a shorter one. Raises LakeWriteRefused and writes
+    nothing in that case; the batch loops record it as a per-code error."""
+    if path.exists():
+        stored = pd.to_datetime(pd.read_parquet(path, columns=["date"])["date"])
+        lost = sorted(set(stored) - set(pd.to_datetime(df["date"])))
+        if lost:
+            raise LakeWriteRefused(
+                f"refused: the pulled series lacks {len(lost)} stored bar(s) "
+                f"({lost[0].date()} .. {lost[-1].date()}); stored series ends {stored.max().date()}, "
+                f"pulled series ends {pd.to_datetime(df['date']).max().date()}")
+    atomic_to_parquet(df, path, index=False)
 
 
 def _daily_bars_reloginning(code: str, start: str, end: str, attempts: int = 4) -> pd.DataFrame:
@@ -171,13 +192,15 @@ def pull_universe_incremental(codes, start: str = BACKTEST_START, end: str = BAC
                     results.append({"code": code, "rows": len(existing), "status": "ok", "mode": "no-new"})
                     continue
                 win_dates = pd.to_datetime(win["date"])
-                rebased = _window_rebased(pd.DataFrame({"date": ex_dates, "close": existing["close"]}),
+                in_range = ex_dates <= pd.Timestamp(end)      # bars after `end` are out of this pull's scope
+                rebased = _window_rebased(pd.DataFrame({"date": ex_dates[in_range],
+                                                        "close": existing["close"][in_range]}),
                                           pd.DataFrame({"date": win_dates, "close": win["close"]}),
                                           since)
                 if rebased:                                                 # dividend/split -> full re-pull
                     df = _daily_bars_reloginning(code, start, end)
                     if not df.empty:
-                        atomic_to_parquet(df, path, index=False)
+                        write_full_series(df, path)
                     results.append({"code": code, "rows": len(df), "status": "ok", "mode": "full:rebased"})
                     continue
                 add = win.loc[win_dates > last]                             # same basis -> safe append
