@@ -4,7 +4,6 @@ leave the stored file byte-for-byte unchanged and report the code as an error.""
 from contextlib import nullcontext
 
 import pandas as pd
-import pytest
 
 from hermes.data import ingest
 
@@ -58,23 +57,18 @@ def test_full_pull_that_extends_the_series_is_written(tmp_path, monkeypatch):
     pd.testing.assert_frame_equal(pd.read_parquet(path), _bars(RAW, D))
 
 
-@pytest.mark.parametrize("latest", ["reference ok", "reference failed"])
-def test_incremental_refresh_with_a_past_end_never_truncates(tmp_path, monkeypatch, latest):
+def test_incremental_refresh_with_a_past_end_never_truncates(tmp_path, monkeypatch):
+    """paper_live --as-of without --no-refresh: stored bars after `end` are out of scope."""
     path = _lake(monkeypatch, tmp_path, _bars(RAW, D), _bars(RAW, D))
-    if hasattr(ingest, "_latest_published_date"):            # the reference symbol is removed later
-        monkeypatch.setattr(ingest, "_latest_published_date",
-                            lambda end: pd.Timestamp(end) if latest == "reference ok" else None)
     before = path.read_bytes()
     s = ingest.pull_universe_incremental(["sh.600036"], "2026-06-01", D[7].strftime("%Y-%m-%d"))
-    assert (s["status"] == "ok").all()
+    assert s["mode"].tolist() == ["append:+0"] and (s["status"] == "ok").all()
     assert path.read_bytes() == before
 
 
 def test_a_real_rebase_with_a_past_end_refuses_rather_than_truncating(tmp_path, monkeypatch):
     rebased = _bars([c * 0.97 if i < 5 else c for i, c in enumerate(RAW)], D)
     path = _lake(monkeypatch, tmp_path, _bars(RAW, D), rebased)
-    if hasattr(ingest, "_latest_published_date"):
-        monkeypatch.setattr(ingest, "_latest_published_date", lambda end: None)
     before = path.read_bytes()
     s = ingest.pull_universe_incremental(["sh.600036"], "2026-06-01", D[7].strftime("%Y-%m-%d"))
     assert s["status"].iloc[0].startswith("error: refused") and path.read_bytes() == before

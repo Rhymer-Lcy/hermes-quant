@@ -144,33 +144,22 @@ def _window_rebased(stored: pd.DataFrame, fresh: pd.DataFrame, since: pd.Timesta
     return False
 
 
-def _latest_published_date(end: str) -> "pd.Timestamp | None":
-    """BaoStock's latest available trading date (<= end), via a liquid reference (sh.600000). Used
-    only to skip already-current codes on a re-run; returns None (optimization off) on any error."""
-    try:
-        ref = bss.daily_bars("sh.600000",
-                             (pd.Timestamp(end) - pd.Timedelta(days=15)).strftime("%Y-%m-%d"),
-                             end, adjustflag="2")
-        return pd.to_datetime(ref["date"]).max() if not ref.empty else None
-    except Exception:  # noqa: BLE001 -- the reference is an optimization, not a requirement
-        return None
-
-
 def pull_universe_incremental(codes, start: str = BACKTEST_START, end: str = BACKTEST_END) -> pd.DataFrame:
     """Forward-adjusted daily bars, refreshed INCREMENTALLY -- the cheap daily path (the full
     `pull_universe` is for the initial build). Per code: re-pull a window starting at the
     REBASE_WINDOW_BARS-th last stored bar and append only the new bars, unless the forward-adjusted
     series re-based (dividend/split: any stored bar in the window changed -- see `_window_rebased`),
-    in which case that one code is re-pulled in full. Codes already at the latest published date
-    are skipped. Same return shape as `pull_universe` (code, rows, status) plus a diagnostic `mode`;
-    manages its own session."""
+    in which case that one code is re-pulled in full. Every code is checked on every run: there is no
+    "already current" shortcut, because the one it replaced took the latest date from a single
+    reference stock (a stale or suspended reference silently froze the whole universe) and also hid a
+    late factor from a same-day re-run. Same return shape as `pull_universe` (code, rows, status)
+    plus a diagnostic `mode`; manages its own session."""
     ensure_dirs()
     out = PARQUET_DIR / "daily"
     out.mkdir(parents=True, exist_ok=True)
     results = []
     n = len(codes)
     with bss.session():
-        latest = _latest_published_date(end)
         for i, code in enumerate(codes, 1):
             path = out / f"{code.replace('.', '_')}.parquet"
             try:
@@ -183,9 +172,6 @@ def pull_universe_incremental(codes, start: str = BACKTEST_START, end: str = BAC
                 existing = pd.read_parquet(path)
                 ex_dates = pd.to_datetime(existing["date"])
                 last = ex_dates.max()
-                if latest is not None and last >= latest:                   # already current -> skip
-                    results.append({"code": code, "rows": len(existing), "status": "ok", "mode": "skip"})
-                    continue
                 since = ex_dates.sort_values().iloc[-min(REBASE_WINDOW_BARS, len(ex_dates))]
                 win = _daily_bars_reloginning(code, since.strftime("%Y-%m-%d"), end)
                 if win.empty:
