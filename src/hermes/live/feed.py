@@ -17,7 +17,8 @@ seed, so the equity curve stays self-consistent.
 """
 from __future__ import annotations
 
-from datetime import date
+from dataclasses import dataclass
+from datetime import datetime
 
 import baostock as bs
 import pandas as pd
@@ -30,10 +31,12 @@ from ..data.sources import baostock_source as bss
 from ..data.sources.baostock_source import BaoStockUnavailable
 from ..io import atomic_to_parquet
 from ..paths import ensure_dirs
+from . import session as ses
 
 
 def _today() -> str:
-    return date.today().strftime("%Y-%m-%d")
+    """Today's date in Beijing, the market's own calendar (the machine runs on US Eastern time)."""
+    return ses.beijing_now().date().isoformat()
 
 
 def extend_membership(end: str | None = None) -> tuple[pd.DataFrame, list[str], list[str]]:
@@ -142,13 +145,50 @@ def assert_publication_complete(members: list[str], min_coverage: float = 0.90) 
     return cov
 
 
-def refresh(end: str | None = None) -> tuple[pd.DataFrame, list[str]]:
-    """One call: extend membership to `end`, refresh the union's daily bars, and verify the day's
-    publication is complete -- each failing loud (see update_daily_bars / assert_publication_complete)
-    before any live report is written. Returns (membership_df, union). Run after BaoStock has posted
-    the day's EOD data (~2-3 h after close; the task is scheduled in the evening)."""
-    end = end or _today()
-    mdf, union, _ = extend_membership(end)
-    update_daily_bars(union, end)
-    assert_publication_complete(current_members(mdf))
-    return mdf, union
+@dataclass(frozen=True)
+class RefreshResult:
+    mdf: pd.DataFrame
+    union: list[str]
+    summary: pd.DataFrame
+    check: ses.SessionCheck | None      # None for a historical (explicit `end`) refresh
+
+
+def verify_session(cal: ses.TradeCalendar, now: datetime, members: list[str]) -> ses.SessionCheck:
+    """The lake must hold the expected session (see live.session): assess it, cross-check the
+    calendar against the lake's own dates, and raise BaoStockUnavailable (retryable) unless the
+    evidence is current_session. CalendarInvalid (fatal) propagates."""
+    panel = load_close_panel(codes=members, field="close")
+    check = ses.assess_session(panel, members, cal, now)
+    ses.corroborate_with_lake(cal, panel.index, upto=check.lake_latest)
+    if check.evidence != ses.CURRENT_SESSION:
+        raise BaoStockUnavailable(
+            f"{check.evidence}: the {check.expected_session} session is due but the lake ends "
+            f"{check.lake_latest} with {check.coverage:.1%} of current members on that date "
+            f"(need {ses.MIN_SESSION_COVERAGE:.0%}); refusing to update the record -- retry once "
+            "BaoStock has published the session")
+    return check
+
+
+def refresh(end: str | None = None, *, now: datetime | None = None,
+            fetch_calendar=None) -> RefreshResult:
+    """One call: extend membership, refresh the union's daily bars, and verify the publication --
+    each failing loud before any live report is written.
+
+    Live mode (`end` None): the expected session comes from a validated exchange calendar in Beijing
+    time (live.session); the pull runs through Beijing today; afterwards the lake must hold that
+    session for >= 90% of current members, or BaoStockUnavailable (exit 75) is raised. A calendar
+    that cannot be fetched is also BaoStockUnavailable; one that contradicts the lake is fatal.
+    Historical mode (`end` given): pull through `end` and keep only the legacy coverage check on the
+    lake's own last date; no session is claimed (check None)."""
+    if end is not None:
+        mdf, union, _ = extend_membership(end)
+        summary = update_daily_bars(union, end)
+        assert_publication_complete(current_members(mdf))
+        return RefreshResult(mdf, union, summary, None)
+    now = now or ses.beijing_now()
+    cal = (fetch_calendar or ses.fetch_calendar)(now)
+    today = now.astimezone(ses.BEIJING).date().isoformat()
+    mdf, union, _ = extend_membership(today)
+    summary = update_daily_bars(union, today)
+    check = verify_session(cal, now, current_members(mdf))
+    return RefreshResult(mdf, union, summary, check)

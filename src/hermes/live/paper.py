@@ -18,7 +18,6 @@ or true-live use; a monthly rebalance does not need them.
 from __future__ import annotations
 
 import json
-from datetime import date
 
 import pandas as pd
 
@@ -29,6 +28,7 @@ from ..paths import PAPER_DIR, ensure_dirs
 from ..research.backtest.frictions import AShareCosts
 from ..research.backtest.portfolio import signal_portfolio_backtest, valuation_panel
 from .ledger import LedgerState, fold_day
+from .session import beijing_now
 from .strategy import DEPLOYED, PAPER_INCEPTION, DeployedStrategy, deployed_signal
 
 
@@ -71,7 +71,8 @@ def ledger_equity(state: LedgerState) -> pd.Series:
 
 def live_step(seed_cash: float, as_of: str | None = None, *, spec: DeployedStrategy = DEPLOYED,
               costs: AShareCosts | None = None, persist: bool = True,
-              inception: str | None = PAPER_INCEPTION, out_dir=None) -> dict:
+              inception: str | None = PAPER_INCEPTION, out_dir=None,
+              status: dict | None = None) -> dict:
     """Run the DEPLOYED strategy as a PAPER account: seed `seed_cash` at the `inception` close,
     invest it fully into the current top-N there, and track forward to `as_of` (default: the latest
     bar on disk). Returns today's report. Idempotent (recompute-from-seed): re-running a date
@@ -83,6 +84,13 @@ def live_step(seed_cash: float, as_of: str | None = None, *, spec: DeployedStrat
     curve (archived separately). Reads the lake refreshed by live.feed; uses the SAME deployed_signal
     as research. Persists the equity curve, full trade log, and a JSON report under `out_dir`
     (default PAPER_DIR; the backtest mode writes to results/backtests/).
+
+    `status` (from the live session check, see live.session.SessionCheck.report_fields) is merged
+    into the report: `evidence` says whether the record holds the expected session
+    (current_session), was recomputed for a past date (historical_recompute), or ran on a stale or
+    incomplete lake. `run_date` / `lake_lag_days` / `fresh` are kept for compatibility, now counted
+    on the Beijing date; `fresh` (lag <= 4 calendar days) cannot tell a stale replay from a current
+    record and is superseded by `evidence`.
     """
     mdf = pd.read_parquet(MEMBERSHIP_PARQUET)
     union = sorted(mdf["code"].unique())
@@ -113,7 +121,7 @@ def live_step(seed_cash: float, as_of: str | None = None, *, spec: DeployedStrat
     # holiday/weekend/pre-publication run (which idempotently re-computes the prior bar) is
     # distinguishable from a fresh trading-day update. `lake_lag_days` > a long weekend (~4d)
     # means the lake is stale (no new data ingested), surfaced as a banner by paper_live.
-    run_dt = date.today()
+    run_dt = beijing_now().date()
     lake_lag = (run_dt - today.date()).days
     report = {
         "as_of": today.strftime("%Y-%m-%d"),          # last data bar (the strategy's clock)
@@ -130,6 +138,7 @@ def live_step(seed_cash: float, as_of: str | None = None, *, spec: DeployedStrat
         "positions": dict(sorted(ledger.positions.items())),
         "today_trades": today_fills,
         "n_trades_total": len(res.trades),
+        **(status or {}),
     }
     if persist:
         ensure_dirs()

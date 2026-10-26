@@ -1,0 +1,224 @@
+"""End-to-end gate for scripts/paper_live.py on a synthetic lake (tmp_path; nothing real is read or
+written): the canonical record is written only with current-session evidence; a stale, incomplete
+or unverifiable lake leaves every canonical file untouched and exits 75 (or 1 for a contradictory
+calendar); a --as-of replay never rewrites the canonical directory."""
+import importlib.util
+from datetime import date, datetime, timedelta
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
+import pytest
+
+from hermes.data import lake as lake_mod
+from hermes.data.sources.baostock_source import BaoStockUnavailable
+from hermes.live import feed, paper
+from hermes.live import session as ss
+
+SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "paper_live.py"
+HOLIDAY = {date(2026, 10, d) for d in range(1, 8)}
+CODES = [f"sh.6000{i:02d}" for i in range(12)]
+TIERS = ["--tiers", "100000", "1000000"]
+
+
+def sessions(first=date(2026, 2, 2), last=date(2026, 11, 6)):
+    out, d = [], first
+    while d <= last:
+        if d.weekday() < 5 and d not in HOLIDAY:
+            out.append(d)
+        d += timedelta(days=1)
+    return out
+
+
+def calendar_rows(start, end):
+    out, d = [], start
+    while d <= end:
+        out.append((d.isoformat(), "1" if d.weekday() < 5 and d not in HOLIDAY else "0"))
+        d += timedelta(days=1)
+    return out
+
+
+def at(y, m, d, hh, mm=0):
+    return datetime(y, m, d, hh, mm, tzinfo=ss.BEIJING)
+
+
+class Env:
+    def __init__(self, tmp_path, monkeypatch):
+        self.tmp, self.mp = tmp_path, monkeypatch
+        self.daily = tmp_path / "daily"
+        self.daily.mkdir()
+        self.paper_dir = tmp_path / "paper"
+        self.paper_dir.mkdir()
+        spec = importlib.util.spec_from_file_location("paper_live_under_test", SCRIPT)
+        self.mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(self.mod)
+        rng = np.random.default_rng(7)
+        days = pd.to_datetime([d for d in sessions() if d <= date(2026, 10, 26)])
+        self.frames = {}
+        for i, code in enumerate(CODES):
+            close = 10 * np.exp(np.cumsum(rng.normal(0, 0.01, len(days))))
+            self.frames[code] = pd.DataFrame({"date": days, "code": code, "close": close,
+                                              "peTTM": 5.0 + 2 * i, "volume": 1e6})
+        month_ends = pd.Series(days, index=days).groupby(days.to_period("M")).max()
+        self.mdf = pd.DataFrame([(d, c) for d in month_ends for c in CODES], columns=["date", "code"])
+        self.mdf = self.mdf[self.mdf["date"] <= "2026-09-30"].reset_index(drop=True)
+        self.membership = tmp_path / "membership.parquet"
+        self.mdf.to_parquet(self.membership, index=False)
+        self.calendar_calls = 0
+        mp = monkeypatch
+        mp.setattr(lake_mod, "PARQUET_DIR", tmp_path)
+        for mod in (paper, self.mod):
+            mp.setattr(mod, "MEMBERSHIP_PARQUET", self.membership)
+            mp.setattr(mod, "PAPER_DIR", self.paper_dir)
+        mp.setattr(paper, "ensure_dirs", lambda: None)
+        mp.setattr(feed, "extend_membership",
+                   lambda end: (self.mdf, sorted(self.mdf["code"].unique()), []))
+        mp.setattr(feed, "update_daily_bars",
+                   lambda union, end: pd.DataFrame({"code": union, "rows": 1, "status": "ok", "mode": "append:+1"}))
+        mp.setattr(ss, "fetch_calendar", self.fetch)
+        self.now = None
+        self.calendar_override = None
+
+    def fetch(self, now):
+        self.calendar_calls += 1
+        if isinstance(self.calendar_override, Exception):
+            raise self.calendar_override
+        start, end = now.date() - timedelta(days=40), now.date() + timedelta(days=7)
+        return ss.validate_calendar(calendar_rows(start, end), start, end)
+
+    def lake_through(self, last: date, missing_on_last=0, extra_bar=None):
+        for code, df in self.frames.items():
+            df = df[df["date"] <= pd.Timestamp(last)].copy()
+            if extra_bar is not None:
+                df = pd.concat([df, df.tail(1).assign(date=pd.Timestamp(extra_bar))], ignore_index=True)
+            if code in CODES[:missing_on_last]:
+                df = df[df["date"] < pd.Timestamp(last)]
+            df.to_parquet(self.daily / f"{code.replace('.', '_')}.parquet", index=False)
+
+    def clock(self, now):
+        self.mp.setattr(ss, "beijing_now", lambda: now)
+        self.mp.setattr(paper, "beijing_now", lambda: now)
+
+    def canonical(self):
+        return {p.name: p.read_bytes() for p in sorted(self.paper_dir.iterdir())}
+
+    def report(self, tier=100000):
+        import json
+        return json.loads((self.paper_dir / f"report_{tier}.json").read_text("utf-8"))
+
+
+@pytest.fixture
+def env(tmp_path, monkeypatch):
+    return Env(tmp_path, monkeypatch)
+
+
+def seed_canonical(env):
+    """A previously written canonical record (the 10-23 one) that a refused run must not touch."""
+    env.lake_through(date(2026, 10, 23))
+    env.clock(at(2026, 10, 23, 18, 30))
+    assert env.mod.run(TIERS) == 0
+    return env.canonical()
+
+
+def test_current_session_is_written_with_its_evidence(env):
+    env.lake_through(date(2026, 10, 26))
+    env.clock(at(2026, 10, 26, 18, 30))
+    assert env.mod.run(TIERS) == 0
+    r = env.report()
+    assert (r["as_of"], r["evidence"], r["session_date"], r["expected_session"]) == \
+        ("2026-10-26", "current_session", "2026-10-26", "2026-10-26")
+    assert r["run_date"] == "2026-10-26" and r["session_coverage"] == 1.0
+
+
+def test_stale_lake_exits_75_and_writes_nothing(env, capsys):
+    before = seed_canonical(env)
+    env.clock(at(2026, 10, 26, 18, 30))                 # Monday's session is due; lake ends Friday
+    assert env.mod.run(TIERS) == 75
+    assert "stale_source: the 2026-10-26 session is due but the lake ends 2026-10-23" in capsys.readouterr().err
+    assert env.canonical() == before
+
+
+def test_incomplete_publication_exits_75_and_writes_nothing(env, capsys):
+    before = seed_canonical(env)
+    env.lake_through(date(2026, 10, 26), missing_on_last=6)    # half the members lack Monday's bar
+    env.clock(at(2026, 10, 26, 18, 30))
+    assert env.mod.run(TIERS) == 75
+    assert "incomplete_publication" in capsys.readouterr().err
+    assert env.canonical() == before
+
+
+@pytest.mark.parametrize("now, lake_last", [(at(2026, 10, 24, 12), date(2026, 10, 23)),   # Saturday
+                                            (at(2026, 10, 5, 20), date(2026, 9, 30)),     # holiday
+                                            (at(2026, 10, 26, 17), date(2026, 10, 23))])  # before due
+def test_no_newer_session_due_is_current(env, now, lake_last):
+    env.lake_through(lake_last)
+    env.clock(now)
+    assert env.mod.run(TIERS) == 0
+    r = env.report()
+    assert r["evidence"] == "current_session" and r["session_date"] == lake_last.isoformat()
+
+
+def test_unavailable_calendar_exits_75_and_writes_nothing(env, capsys):
+    before = seed_canonical(env)
+    env.lake_through(date(2026, 10, 26))
+    env.calendar_override = BaoStockUnavailable("trade calendar query failed: 10002007")
+    env.clock(at(2026, 10, 26, 18, 30))
+    assert env.mod.run(TIERS) == 75
+    assert "trade calendar query failed" in capsys.readouterr().err
+    assert env.canonical() == before
+
+
+def test_calendar_contradicting_the_lake_is_fatal(env, capsys):
+    before = seed_canonical(env)
+    env.lake_through(date(2026, 10, 23), extra_bar=date(2026, 10, 24))   # a bar on a Saturday
+    env.clock(at(2026, 10, 26, 18, 30))
+    assert env.mod.run(TIERS) == 1
+    assert "CalendarInvalid: the lake's latest bar 2026-10-24 is not a session day" in capsys.readouterr().err
+    assert env.canonical() == before
+
+
+def test_no_refresh_on_a_stale_lake_writes_nothing(env, capsys):
+    before = seed_canonical(env)
+    env.clock(at(2026, 10, 26, 18, 30))
+    assert env.mod.run(["--no-refresh", *TIERS]) == 75
+    assert "stale_source" in capsys.readouterr().err
+    assert env.canonical() == before
+
+
+def test_no_refresh_on_a_current_lake_writes(env):
+    env.lake_through(date(2026, 10, 26))
+    env.clock(at(2026, 10, 26, 19))
+    assert env.mod.run(["--no-refresh", *TIERS]) == 0
+    assert env.report()["evidence"] == "current_session"
+
+
+def test_replay_never_rewrites_the_canonical_record(env):
+    before = seed_canonical(env)
+    assert env.mod.run(["--as-of", "2026-09-30", "--no-refresh", *TIERS]) == 0
+    assert env.canonical() == before and env.calendar_calls == 1   # only the seeding run asked
+
+
+def test_replay_into_an_explicit_directory(env):
+    before = seed_canonical(env)
+    out = env.tmp / "replay"
+    assert env.mod.run(["--as-of", "2026-09-30", "--no-refresh", "--out-dir", str(out), *TIERS]) == 0
+    import json
+    r = json.loads((out / "report_100000.json").read_text("utf-8"))
+    assert r["as_of"] == "2026-09-30" and r["evidence"] == "historical_recompute"
+    assert env.canonical() == before
+
+
+def test_replay_into_the_canonical_directory_is_refused(env):
+    before = seed_canonical(env)
+    with pytest.raises(SystemExit) as exc:
+        env.mod.run(["--as-of", "2026-09-30", "--no-refresh", "--out-dir", str(env.paper_dir), *TIERS])
+    assert exc.value.code == 2 and env.canonical() == before
+
+
+def test_rerun_of_the_same_session_is_byte_identical(env):
+    env.lake_through(date(2026, 10, 26))
+    env.clock(at(2026, 10, 26, 18, 30))
+    assert env.mod.run(TIERS) == 0
+    first = env.canonical()
+    assert env.mod.run(TIERS) == 0
+    assert env.canonical() == first
