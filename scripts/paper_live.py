@@ -45,7 +45,7 @@ from hermes.data.membership import MEMBERSHIP_PARQUET
 from hermes.data.sources.baostock_source import BaoStockUnavailable
 from hermes.live import session as ses
 from hermes.live.feed import assert_right_edge_safe, current_members, refresh, verify_session
-from hermes.live.paper import live_step
+from hermes.live.paper import live_step, verify_canonical_manifest, write_canonical_manifest
 from hermes.live.strategy import ALL_TIERS, DEPLOYED, PAPER_INCEPTION, TIER_LABEL
 from hermes.paths import BACKTESTS_DIR, PAPER_DIR
 
@@ -102,11 +102,15 @@ def main(argv: list[str] | None = None) -> int:
     print(f"  {'band':>6} {'tier':>9} {'as_of':>12} {'equity':>14} {'totRet':>8} {'maxDD':>8} "
           f"{'avgN':>6} {'pos':>4} {'todayTrades':>12}")
     # Pass 1 computes every tier without writing. On the live path the canonical record is written
-    # (pass 2) only after the right-edge check passes for ALL tiers, so a refusal never leaves some
-    # tiers updated and others not; pass 2 must reproduce pass 1 exactly.
+    # (pass 2) only after the right-edge check passes for ALL tiers, so a REFUSAL never leaves some
+    # tiers updated and others not; pass 2 must reproduce pass 1 exactly. Pass 2 itself is not a
+    # transaction: a crash inside it can leave a torn record, which the manifest written last
+    # (canonical_manifest.json, the commit point) exposes until the next successful run rewrites it.
     step = dict(as_of=args.as_of, inception=inception, out_dir=out_dir, status=status)
     reports = {cap: live_step(cap, persist=persist and not live, **step) for cap in args.tiers}
     if live:
+        state, problems = verify_canonical_manifest(Path(PAPER_DIR))
+        print(f"previous canonical write: {state}" + (f" ({'; '.join(problems[:5])})" if problems else ""))
         exits = sorted({c for r in reports.values() for c in r["right_edge_exits"]})
         if exits:
             disp = assert_right_edge_safe(exits, status["session_date"], summary)
@@ -118,6 +122,7 @@ def main(argv: list[str] | None = None) -> int:
                     {k: v for k, v in reports[cap].items() if k not in clock}:
                 raise RuntimeError(f"tier {cap}: the written report differs from the checked one")
             reports[cap] = r
+        write_canonical_manifest(Path(PAPER_DIR), reports)      # the commit point: written last
     last_report = None
     for cap in args.tiers:
         r = reports[cap]

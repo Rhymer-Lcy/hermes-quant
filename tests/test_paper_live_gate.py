@@ -287,6 +287,57 @@ def test_rerun_of_the_same_session_is_byte_identical(env):
     assert env.canonical() == first
 
 
+# ---- crash inside the canonical write: torn states are detectable and self-heal --------------
+def test_a_clean_write_commits_a_consistent_manifest(env):
+    env.lake_through(date(2026, 10, 26))
+    env.clock(at(2026, 10, 26, 18, 30))
+    assert env.mod.run(TIERS) == 0
+    assert paper.verify_canonical_manifest(env.paper_dir) == ("consistent", [])
+    import json
+    m = json.loads((env.paper_dir / paper.CANONICAL_MANIFEST).read_text("utf-8"))
+    assert (m["as_of"], m["evidence"], m["tiers"]) == ("2026-10-26", "current_session", [100000, 1000000])
+    assert len(m["files"]) == 6
+
+
+@pytest.mark.parametrize("fail_at", range(1, 8))          # 2 tiers x 3 files, then the manifest
+def test_a_crash_at_every_write_boundary_is_detected_and_heals(env, fail_at):
+    seed_canonical(env)                                    # a committed 10-23 record
+    env.lake_through(date(2026, 10, 26))
+    env.clock(at(2026, 10, 26, 18, 30))
+    real_parquet, real_text = paper.atomic_to_parquet, paper.atomic_write_text
+    count = {"n": 0}
+
+    def faulty(real):
+        def write(*a, **k):
+            count["n"] += 1
+            if count["n"] == fail_at:
+                raise OSError(f"injected failure at write {fail_at}")
+            return real(*a, **k)
+        return write
+    env.mp.setattr(paper, "atomic_to_parquet", faulty(real_parquet))
+    env.mp.setattr(paper, "atomic_write_text", faulty(real_text))
+    assert env.mod.run(TIERS) == 1                          # a write error is fatal, not retried
+    state, problems = paper.verify_canonical_manifest(env.paper_dir)
+    if fail_at == 1:                                        # nothing was replaced yet
+        assert state == "consistent" and env.report()["as_of"] == "2026-10-23"
+    else:
+        assert state == "incomplete" and problems
+    env.mp.setattr(paper, "atomic_to_parquet", real_parquet)
+    env.mp.setattr(paper, "atomic_write_text", real_text)
+    assert env.mod.run(TIERS) == 0                          # the next run rewrites everything
+    assert paper.verify_canonical_manifest(env.paper_dir) == ("consistent", [])
+    assert env.report()["as_of"] == "2026-10-26"
+
+
+def test_a_tier_outside_the_last_commit_is_reported(env):
+    env.lake_through(date(2026, 10, 26))
+    env.clock(at(2026, 10, 26, 18, 30))
+    assert env.mod.run(TIERS) == 0
+    assert env.mod.run(["--tiers", "100000"]) == 0          # a manual subset run commits one tier
+    state, problems = paper.verify_canonical_manifest(env.paper_dir)
+    assert state == "incomplete" and problems == ["report_1000000.json: not covered by the last commit"]
+
+
 # ---- right edge: a held name without a bar on the session ----------------------------------
 def held_name(env, tier=1000000):
     held = sorted(env.report(tier)["positions"])

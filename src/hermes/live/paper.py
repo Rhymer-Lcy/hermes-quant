@@ -159,3 +159,47 @@ def live_step(seed_cash: float, as_of: str | None = None, *, spec: DeployedStrat
         atomic_write_text(json.dumps(report, ensure_ascii=False, indent=2),
                           out / f"report_{tag}.json")
     return report
+
+
+CANONICAL_MANIFEST = "canonical_manifest.json"
+
+
+def _tier_files(cap: int) -> list[str]:
+    return [f"curve_{cap}.parquet", f"trades_{cap}.parquet", f"report_{cap}.json"]
+
+
+def _sha256(path) -> str:
+    import hashlib
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def write_canonical_manifest(out_dir, reports: dict) -> dict:
+    """The COMMIT POINT of a canonical write, written last (atomically) once every tier's three files
+    are on disk: as_of, evidence and the sha256 of every file. Each file is replaced atomically, but
+    seven tiers x three files are not one transaction -- a crash between them leaves some files new
+    and some old. Such a torn state cannot be prevented here; the manifest makes it detectable
+    (verify_canonical_manifest), and the next successful run rewrites every file and the manifest."""
+    first = next(iter(reports.values()))
+    files = {name: _sha256(out_dir / name) for cap in sorted(reports) for name in _tier_files(int(cap))}
+    manifest = {"schema": 1, "as_of": first["as_of"], "evidence": first.get("evidence"),
+                "session_date": first.get("session_date"), "tiers": sorted(int(c) for c in reports),
+                "files": files}
+    atomic_write_text(json.dumps(manifest, indent=2), out_dir / CANONICAL_MANIFEST)
+    return manifest
+
+
+def verify_canonical_manifest(out_dir) -> tuple[str, list[str]]:
+    """'consistent' when the manifest exists, every file it lists matches its hash, and every
+    report_*.json on disk is covered by it; 'absent' when there is no manifest (records written
+    before the commit point existed); otherwise 'incomplete', with the reasons."""
+    path = out_dir / CANONICAL_MANIFEST
+    if not path.exists():
+        return "absent", []
+    m = json.loads(path.read_text(encoding="utf-8"))
+    problems = [f"{name}: {'missing' if not (out_dir / name).exists() else 'changed since the commit'}"
+                for name, digest in m["files"].items()
+                if not (out_dir / name).exists() or _sha256(out_dir / name) != digest]
+    listed = {name for name in m["files"] if name.startswith("report_")}
+    problems += [f"{p.name}: not covered by the last commit"
+                 for p in sorted(out_dir.glob("report_*.json")) if p.name not in listed]
+    return ("consistent" if not problems else "incomplete"), problems
