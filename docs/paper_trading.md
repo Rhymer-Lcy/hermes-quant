@@ -53,16 +53,18 @@ re-spells the 5:1 value/reversal blend, so they cannot diverge. `test_paper.py` 
    previously applied to the tax as well, and for the tax it was wrong.
 
 2. **Suspension vs delisting at the right edge.** The engine force-liquidates a holding once its
-   price series ends (NaN after `last_valid_index`), at the last real price. A suspension does not
-   trigger this: BaoStock serves a suspended day as a row carrying the previous close (37,802 rows
-   with zero or no volume across the 667 HS300-union files on 2026-10-26, none with an empty close),
-   so a suspended holding stays held and valued. What does trigger it at the right edge is an
-   ABSENT bar: a delisting (correctly), but also a pull that failed for that name or a bar not yet
-   published, where the exit would be a sell the market never printed. On the live path every such
-   exit (`right_edge_exits` in the report) must be a delisting BaoStock itself records
-   (`stock_basic` status 0, `outDate` on or before the session), or nothing is written and the run
-   exits 75 (`feed.assert_right_edge_safe`; see Operations). Past bars and the research backtests
-   keep the engine's rule unchanged.
+   price series ends (NaN after `last_valid_index`), at the last real price, on the first bar after
+   it. A suspension does not trigger this: BaoStock serves a suspended day as a row carrying the
+   previous close (37,802 rows with zero or no volume across the 667 HS300-union files on
+   2026-10-26, none with an empty close), so a suspended holding stays held and valued. What does
+   trigger it at the right edge is an ABSENT bar: a delisting (correctly), but also a pull that
+   failed for that name or a bar not yet published, where the exit would be a sell the market never
+   printed. On the live path every such exit anywhere in the recomputed record (`right_edge_exits`
+   in the report; a name absent for two sessions is sold on the first, so checking today's fills
+   alone would miss it) must be a delisting BaoStock itself records (`stock_basic` status 0,
+   `outDate` on or before the session), or nothing is written and the run exits 75
+   (`feed.assert_right_edge_safe`; see Operations). Past bars and the research backtests keep the
+   engine's rule unchanged.
 
 3. **Membership must stay current.** `live.feed.extend_membership` pulls HS300 month-end
    snapshots after the last stored one and appends (never rebuilds), adding new entrants to the
@@ -177,10 +179,10 @@ schtasks /Create /SC WEEKLY /D MON,TUE,WED,THU,FRI /ST 19:00 /TN hermes-paper ^
   the canonical record), or, in the refused cases, `stale_source` / `incomplete_publication`, which
   are raised and never written. `expected_session`, `session_date`, `session_coverage` and
   `session_checked_at` (ISO 8601, +08:00) record what was checked; `right_edge_exits` lists names
-  the engine sold today without a bar today. `run_date` / `lake_lag_days` / `fresh` are kept for
-  compatibility and now count on the Beijing date; `fresh` (lag <= 4 calendar days) cannot tell a
-  stale replay from a current record and is superseded by `evidence`. Reports written before this
-  change lack the new keys.
+  the engine force-sold, on a bar without their price, anywhere in the record. `run_date` /
+  `lake_lag_days` / `fresh` are kept for compatibility and now count on the Beijing date; `fresh`
+  (lag <= 4 calendar days) cannot tell a stale replay from a current record and is superseded by
+  `evidence`. Reports written before this change lack the new keys.
 - **Calendar, not a reference stock**: the trade calendar comes from BaoStock `query_trade_dates`,
   is validated (one row per day, no weekend session, no closure longer than 12 days) and is
   cross-checked against the lake's own bar dates; a contradiction is fatal (exit 1). The

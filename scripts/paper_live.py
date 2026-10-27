@@ -21,10 +21,11 @@ A --as-of replay used to overwrite results/paper/ with a ledger cut at that date
 or writes to an explicit --out-dir that is not the canonical directory. It also requires --no-refresh:
 a replay never pulls BaoStock, extends the membership or rewrites any lake file.
 
-Right edge: a held name with no bar on the session is liquidated by the engine at its last price
-(report field `right_edge_exits`). On the live path every such name must be a delisting BaoStock
-itself records (stock_basic status 0, outDate on or before the session); a failed pull or a bar not
-yet published blocks the write with exit 75 instead of recording a sell the market did not print.
+Right edge: a held name whose series ends is liquidated by the engine at its last price, on the first
+bar it lacks (report field `right_edge_exits`, every such exit in the record, not only today's). On
+the live path every such name must be a delisting BaoStock itself records (stock_basic status 0,
+outDate on or before the session); a failed pull or a bar not yet published blocks the write with
+exit 75 instead of recording a sell the market did not print.
 
 Scheduling (Windows Task Scheduler), weekdays in the Beijing evening, after the EOD publication is due
 (live.session.PUBLICATION_DUE). Use the wrapper scripts/paper_live.ps1 so stdout/stderr are captured to

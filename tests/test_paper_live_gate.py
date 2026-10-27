@@ -114,6 +114,12 @@ class Env:
                 df.loc[df.index[-1], ["close", "volume"]] = [df["close"].iloc[-2], np.nan]
             df.to_parquet(self.daily / f"{code.replace('.', '_')}.parquet", index=False)
 
+    def frames_truncated(self, code, last: date):
+        """Rewrite one code's lake file to end on `last` (absent on every later session)."""
+        df = self.frames[code]
+        df[df["date"] <= pd.Timestamp(last)].to_parquet(
+            self.daily / f"{code.replace('.', '_')}.parquet", index=False)
+
     def clock(self, now):
         self.mp.setattr(ss, "beijing_now", lambda: now)
         self.mp.setattr(paper, "beijing_now", lambda: now)
@@ -389,6 +395,38 @@ def test_a_verified_delisting_is_written_with_the_engines_exit(env):
     sells = [t for t in r["today_trades"] if t["code"] == code]
     last_close = env.frames[code].set_index("date")["close"].loc["2026-10-23"]
     assert len(sells) == 1 and sells[0]["shares"] < 0 and sells[0]["price"] == pytest.approx(last_close)
+
+
+def two_sessions_absent(env):
+    """Canonical written on 10-22; then a held name has no bar on 10-23 or 10-26 (Monday)."""
+    env.lake_through(date(2026, 10, 22))
+    env.clock(at(2026, 10, 22, 18, 30))
+    assert env.mod.run(TIERS) == 0
+    before = env.canonical()
+    code = held_name(env)
+    env.lake_through(date(2026, 10, 26))
+    env.frames_truncated(code, date(2026, 10, 22))
+    env.clock(at(2026, 10, 26, 18, 30))
+    return before, code
+
+
+def test_a_name_absent_for_two_sessions_still_blocks_on_the_second(env, capsys):
+    """The engine dates the forced exit on the FIRST bar the name lacks (10-23), so on 10-26 it is not
+    among today's fills; the check must still find it."""
+    before, code = two_sessions_absent(env)
+    assert env.mod.run(TIERS) == 75
+    assert f"'{code}': 'missing_published_bar'" in capsys.readouterr().err
+    assert env.canonical() == before
+
+
+def test_an_earlier_verified_delisting_is_rechecked_and_kept(env):
+    before, code = two_sessions_absent(env)
+    env.delisted = {code: date(2026, 10, 23)}
+    assert env.mod.run(TIERS) == 0
+    r = env.report(1000000)
+    assert r["right_edge_exits"] == [code] and code not in r["positions"]
+    assert [t for t in r["today_trades"] if t["code"] == code] == []    # sold on 10-23, not today
+    assert env.terminal_calls == [[code]]
 
 
 def test_a_suspended_held_name_is_kept_without_any_check(env):
