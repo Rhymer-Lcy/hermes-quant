@@ -3,6 +3,7 @@ written): the canonical record is written only with current-session evidence; a 
 or unverifiable lake leaves every canonical file untouched and exits 75 (or 1 for a contradictory
 calendar); a --as-of replay never rewrites the canonical directory."""
 import importlib.util
+import os
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
@@ -306,8 +307,10 @@ def test_as_of_without_no_refresh_is_refused_before_any_pull(env, extra):
 
 def test_the_canonical_directory_is_recognised_under_another_spelling(env):
     before = seed_canonical(env)
-    variants = [str(env.paper_dir).upper(), str(env.paper_dir / ".." / "paper"),
-                str(env.paper_dir).replace("\\", "/")]
+    variants = [str(env.paper_dir / ".." / "paper"), str(env.paper_dir).replace("\\", "/")]
+    upper = Path(str(env.paper_dir).upper())       # the same directory only on a case-insensitive FS
+    if upper.exists() and os.path.samefile(upper, env.paper_dir):
+        variants.append(str(upper))
     for v in variants:
         with pytest.raises(SystemExit) as exc:
             env.mod.run(["--as-of", "2026-09-30", "--no-refresh", "--out-dir", v, *TIERS])
