@@ -216,8 +216,11 @@ changing the experiment has to be a deliberate, visible act.
 ```
 python scripts/paper_shadow_d5.py                # gates, then persist (no data refresh)
 python scripts/paper_shadow_d5.py --dry-run      # gates + report, write nothing
-python scripts/paper_shadow_d5.py --as-of 2026-09-30
+python scripts/paper_shadow_d5.py --as-of 2026-09-30   # replay, print only
 ```
+
+A `--as-of` replay is never persisted: writing it would replace the forward record with a ledger
+cut at that date.
 
 **A note on the next execution dates.** D=1's next rebalance is expected on 2026-09-01 and the
 shadow's on 2026-09-07 (the 5th is a Saturday). These are **projections from the current trading

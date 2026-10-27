@@ -2,12 +2,15 @@
 
   python scripts/paper_shadow_d5.py                  # recompute on the current lake, persist
   python scripts/paper_shadow_d5.py --dry-run        # gates + report, write nothing
-  python scripts/paper_shadow_d5.py --as-of 2026-09-30   # replay through a date
+  python scripts/paper_shadow_d5.py --as-of 2026-09-30   # replay through a date, print only
 
 Never refreshes the lake: the canonical run owns the data pull, and the shadow reads whatever the
 canonical run already validated. That ordering is what keeps a shadow failure from touching the
 canonical record -- this script writes only under results/paper_shadow/d5/ and asserts, before and
 after, that results/paper/ is byte-for-byte unchanged.
+
+A --as-of replay is never persisted: writing it would overwrite the forward shadow record with a
+ledger cut at that date.
 
 Three blocking gates run before any output is written; any failure exits nonzero having written
 nothing:
@@ -151,7 +154,7 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument("--as-of", default=None, help="recompute through this date (YYYY-MM-DD)")
     ap.add_argument("--tiers", type=int, nargs="*", default=ALL_TIERS)
     args = ap.parse_args(argv)
-    persist = not args.dry_run
+    persist = not args.dry_run and args.as_of is None      # a replay never overwrites the record
 
     before = fingerprint_canonical()
     print(f"canonical results/paper fingerprinted: {len(before)} files (write-protected)\n")
@@ -240,7 +243,7 @@ def main(argv: list[str] | None = None) -> None:
         print(f"\n*** STALE: last bar {last['as_of']} is {last['lake_lag_days']}d behind "
               f"{last['run_date']} -- recomputed, not updated. ***")
     if not persist:
-        print("\n  DRY RUN: nothing written")
+        print("\n  " + ("DRY RUN" if args.dry_run else "REPLAY") + ": nothing written")
     else:
         print(f"\n  saved -> {SHADOW_DIR}")
     print("\n  NOTE: this is a FORWARD SHADOW of a historical champion that FAILED issue #21's")

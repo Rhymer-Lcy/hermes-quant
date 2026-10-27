@@ -1,7 +1,7 @@
 """The D=5 shadow's right edge (scripts/paper_shadow_d5.py) on synthetic panels; nothing real is read
 or written. The shadow can hold a name the canonical D=1 book does not, so the canonical run's
 right-edge check never sees it: a shadow-only holding without a bar on the latest session must be a
-verified delisting before ANY tier (or the manifest) is written."""
+verified delisting before ANY tier (or the manifest) is written, and a --as-of replay writes nothing."""
 import importlib.util
 from datetime import date
 from pathlib import Path
@@ -126,3 +126,8 @@ def test_a_dry_run_reports_the_refusal_and_writes_nothing(tmp_path, monkeypatch)
         d.mod.main(TIERS + ["--dry-run"])
     assert d.files() == []
 
+
+def test_an_as_of_replay_is_never_persisted(tmp_path, monkeypatch):
+    d = Driver(tmp_path, monkeypatch, panels(last_bar_missing=False))
+    d.mod.main(TIERS + ["--as-of", "2026-09-30"])
+    assert d.files() == []
