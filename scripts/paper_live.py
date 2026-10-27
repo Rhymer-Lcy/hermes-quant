@@ -18,7 +18,8 @@ Evidence (report field `evidence`):
   stale_source /       the lake ends before the due session, or too few current members carry its bar:
   incomplete_publication  nothing is written and the run exits 75 so the wrapper retries
 A --as-of replay used to overwrite results/paper/ with a ledger cut at that date; it now prints only,
-or writes to an explicit --out-dir that is not the canonical directory.
+or writes to an explicit --out-dir that is not the canonical directory. It also requires --no-refresh:
+a replay never pulls BaoStock, extends the membership or rewrites any lake file.
 
 Right edge: a held name with no bar on the session is liquidated by the engine at its last price
 (report field `right_edge_exits`). On the live path every such name must be a delisting BaoStock
@@ -60,6 +61,9 @@ def main(argv: list[str] | None = None) -> int:
                     help="full-history backtest (seed at 2015, inception=None) -> results/backtests/, "
                          "NOT the forward paper record")
     args = ap.parse_args(argv)
+    if args.as_of is not None and not args.no_refresh:
+        ap.error("--as-of replays the lake as it is and needs --no-refresh: a replay must never pull "
+                 "BaoStock, extend the membership or rewrite any lake file")
 
     inception = None if args.backtest else PAPER_INCEPTION       # default forward paper; --backtest = full history
     live = not args.backtest and args.as_of is None

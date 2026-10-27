@@ -126,7 +126,8 @@ python scripts/paper_live.py --as-of 2026-03-31 --no-refresh --out-dir <dir>  # 
 ```
 
 A `--as-of` replay never writes `results/paper/` (it used to overwrite the canonical files with a
-ledger cut at that date); `--out-dir` may not point there.
+ledger cut at that date); `--out-dir` may not point there. It also requires `--no-refresh`, so a replay
+never pulls BaoStock, extends the membership or rewrites any lake file.
 
 Outputs (gitignored) under `results/paper/`: `curve_<tier>.parquet`, `trades_<tier>.parquet`,
 `report_<tier>.json`, `logs/paper_<date>.log`. Every run is idempotent (recompute-from-seed),

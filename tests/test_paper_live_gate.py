@@ -247,6 +247,37 @@ def test_replay_into_the_canonical_directory_is_refused(env):
     assert exc.value.code == 2 and env.canonical() == before
 
 
+def _lake_bytes(env):
+    return {p.name: p.read_bytes() for p in sorted(env.daily.iterdir())} | {
+        "membership": env.membership.read_bytes()}
+
+
+@pytest.mark.parametrize("extra", [[], ["--out-dir", "REPLAY"], ["--backtest"]])
+def test_as_of_without_no_refresh_is_refused_before_any_pull(env, extra):
+    """A replay must not pull, extend the membership or touch the lake: --as-of needs --no-refresh."""
+    before = seed_canonical(env)
+    lake_before = _lake_bytes(env)
+    calls = []
+    env.mp.setattr(env.mod, "refresh", lambda *a, **k: calls.append("refresh"))
+    argv = ["--as-of", "2026-09-30", *[str(env.tmp / x) if x == "REPLAY" else x for x in extra], *TIERS]
+    with pytest.raises(SystemExit) as exc:
+        env.mod.run(argv)
+    assert exc.value.code == 2 and calls == []
+    assert env.canonical() == before and _lake_bytes(env) == lake_before
+    assert not (env.tmp / "REPLAY").exists()
+
+
+def test_the_canonical_directory_is_recognised_under_another_spelling(env):
+    before = seed_canonical(env)
+    variants = [str(env.paper_dir).upper(), str(env.paper_dir / ".." / "paper"),
+                str(env.paper_dir).replace("\\", "/")]
+    for v in variants:
+        with pytest.raises(SystemExit) as exc:
+            env.mod.run(["--as-of", "2026-09-30", "--no-refresh", "--out-dir", v, *TIERS])
+        assert exc.value.code == 2, v
+    assert env.canonical() == before
+
+
 def test_rerun_of_the_same_session_is_byte_identical(env):
     env.lake_through(date(2026, 10, 26))
     env.clock(at(2026, 10, 26, 18, 30))
