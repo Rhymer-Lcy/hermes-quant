@@ -95,8 +95,10 @@ sell when the bar is merely absent. The canonical run checks this only for the c
 holdings, and the shadow can hold other names (the books diverge from 2026-09-01, when D=1
 rebalances and the shadow does not), so the driver computes every tier first and requires each such
 name anywhere in the record (report field `right_edge_exits`) to be a delisting BaoStock records on
-or before the session. Otherwise it exits 75 having written no
-tier and no manifest; the wrapper discards the code, and the next run recomputes from the seed.
+or before the session. That delisting lookup is the shadow's only network call and is bounded
+(`TERMINAL_LOOKUP_TIMEOUT_S`, 120 s), since the shadow runs outside the wrapper's idle watchdog.
+Otherwise it exits 75 having written no tier and no manifest; the wrapper discards the code, and
+the next run recomputes from the seed.
 
 ## The persistence outage, and why the reconstructed bars are still prospective evidence
 

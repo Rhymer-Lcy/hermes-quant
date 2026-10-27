@@ -3,6 +3,8 @@ or written. The shadow can hold a name the canonical D=1 book does not, so the c
 right-edge check never sees it: a shadow-only holding without a bar on the latest session must be a
 verified delisting before ANY tier (or the manifest) is written, and a --as-of replay writes nothing."""
 import importlib.util
+import threading
+import time
 from datetime import date
 from pathlib import Path
 
@@ -125,6 +127,33 @@ def test_no_right_edge_exit_writes_without_asking_baostock(tmp_path, monkeypatch
     d.mod.main(TIERS)
     assert d.terminal_calls == []
     assert "report_1000000.json" in d.files()
+
+
+def test_a_hung_delisting_lookup_times_out_and_writes_nothing(tmp_path, monkeypatch):
+    d = Driver(tmp_path, monkeypatch, panels())
+    release = threading.Event()
+    monkeypatch.setattr(feed, "terminal_dates", lambda codes: release.wait(30) and {})
+    monkeypatch.setattr(d.mod, "TERMINAL_LOOKUP_TIMEOUT_S", 0.2)
+    t0 = time.perf_counter()
+    try:
+        with pytest.raises(BaoStockUnavailable, match="did not answer"):
+            d.mod.main(TIERS)
+    finally:
+        release.set()
+    assert time.perf_counter() - t0 < 20
+    assert d.files() == []
+
+
+def test_a_failed_delisting_lookup_is_raised_on_the_callers_thread(tmp_path, monkeypatch):
+    d = Driver(tmp_path, monkeypatch, panels())
+
+    def fail(codes):
+        raise BaoStockUnavailable("stock_basic query failed: 10002007")
+
+    monkeypatch.setattr(feed, "terminal_dates", fail)
+    with pytest.raises(BaoStockUnavailable, match="10002007"):
+        d.mod.main(TIERS)
+    assert d.files() == []
 
 
 def test_a_dry_run_reports_the_refusal_and_writes_nothing(tmp_path, monkeypatch):

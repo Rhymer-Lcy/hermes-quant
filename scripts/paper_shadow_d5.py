@@ -20,8 +20,10 @@ nothing:
   3  no look-ahead       -- every post-fork rebalance has signal bar < execution bar
 A forward run then computes every tier before writing any: a name the shadow force-sells on a bar
 without its price (the engine's right-edge liquidation, anywhere in the record) must be a delisting
-BaoStock records, else the run exits 75 having written nothing. The canonical run's own check covers only the
-canonical book's holdings, and the shadow can hold other names.
+BaoStock records, else the run exits 75 having written nothing. That lookup is this script's only
+network call and runs under a deadline (TERMINAL_LOOKUP_TIMEOUT_S), because the shadow runs outside
+the wrapper's idle watchdog. The canonical run's own check covers only the canonical book's
+holdings, and the shadow can hold other names.
 
 Exit codes: 0 success; 75 (EX_TEMPFAIL) transient data failure; any other nonzero = fatal.
 The wrapper treats ALL shadow exit codes as non-fatal for the canonical task.
@@ -32,9 +34,12 @@ import argparse
 import json
 import subprocess
 import sys
+import threading
 
 import pandas as pd
 
+from hermes.data.sources.baostock_source import BaoStockUnavailable
+from hermes.live import feed
 from hermes.live.feed import assert_right_edge_safe
 from hermes.live.paper import live_step
 from hermes.live.shadow import (BASELINE_DAY, CANDIDATE_DAY, SCHEMA_VERSION, SHADOW_DIR,
@@ -47,6 +52,31 @@ from hermes.paths import PAPER_DIR
 from hermes.research.backtest.schedule import calendar_rebalance_schedule
 
 TOL = 1e-9
+TERMINAL_LOOKUP_TIMEOUT_S = 120     # the delisting lookup is this driver's only network call
+
+
+def bounded_terminal_dates(codes, timeout_s: float | None = None):
+    """feed.terminal_dates with a deadline. The shadow runs after the canonical attempt, outside the
+    wrapper's idle watchdog, and a BaoStock socket has no timeout of its own: a hung lookup would
+    hold the scheduled task open. Past the deadline this raises BaoStockUnavailable (nothing is
+    written) and leaves the lookup on a daemon thread, which does not keep the process alive."""
+    timeout_s = TERMINAL_LOOKUP_TIMEOUT_S if timeout_s is None else timeout_s
+    box: dict = {}
+
+    def call():
+        try:
+            box["value"] = feed.terminal_dates(codes)
+        except BaseException as exc:            # noqa: BLE001 -- re-raised on the caller's thread
+            box["error"] = exc
+
+    t = threading.Thread(target=call, name="terminal-lookup", daemon=True)
+    t.start()
+    t.join(timeout_s)
+    if t.is_alive():
+        raise BaoStockUnavailable(f"delisting lookup for {codes} did not answer within {timeout_s} s")
+    if "error" in box:
+        raise box["error"]
+    return box["value"]
 
 
 def head_commit() -> str:
@@ -182,7 +212,8 @@ def main(argv: list[str] | None = None) -> None:
                for cap in args.tiers}
     exits = sorted({c for r in reports.values() for c in r["right_edge_exits"]})
     if exits and args.as_of is None:
-        disp = assert_right_edge_safe(exits, panels[0].index[-1], None)
+        disp = assert_right_edge_safe(exits, panels[0].index[-1], None,
+                                      terminal=bounded_terminal_dates)
         print(f"\n  right-edge exits verified as delistings: {disp}")
 
     manifest_path = SHADOW_DIR / "manifest.json"
