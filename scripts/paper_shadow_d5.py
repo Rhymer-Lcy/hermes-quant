@@ -283,17 +283,21 @@ def main(argv: list[str] | None = None) -> None:
     print(f"OK {last['run_date'] if last else ''} (as_of {last['as_of'] if last else '-'})")
 
 
-if __name__ == "__main__":
-    from hermes.data.sources.baostock_source import BaoStockUnavailable
-
+def run(argv: list[str] | None = None) -> int:
+    """main() with the exit-code contract: 0 success, 75 transient, 2 gate failure, 1 fatal."""
     try:
-        main()
+        main(argv)
+        return 0
     except BaoStockUnavailable as exc:
         print(f"\nRETRYABLE: shadow transient data failure: {exc}", file=sys.stderr)
-        sys.exit(75)
+        return 75
     except ShadowGateError as exc:
         print(f"\nGATE FAILURE: {exc}\nNo shadow output written.", file=sys.stderr)
-        sys.exit(2)
+        return 2
     except Exception as exc:                            # noqa: BLE001 -- fail loud, never silently
         print(f"\nERROR: paper_shadow_d5 failed: {exc}", file=sys.stderr)
-        sys.exit(1)
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(run())
