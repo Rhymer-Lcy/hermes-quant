@@ -20,6 +20,7 @@ SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "paper_live.py"
 HOLIDAY = {date(2026, 10, d) for d in range(1, 8)}
 CODES = [f"sh.6000{i:02d}" for i in range(12)]
 TIERS = ["--tiers", "100000", "1000000"]
+CANONICAL = [100000, 1000000]       # the canonical tier set of this synthetic record (ALL_TIERS has 7)
 
 
 def sessions(first=date(2026, 2, 2), last=date(2026, 11, 6)):
@@ -81,10 +82,13 @@ class Env:
         mp.setattr(feed, "update_daily_bars", self.pull_summary)
         mp.setattr(feed, "terminal_dates", self.terminal)
         mp.setattr(ss, "fetch_calendar", self.fetch)
+        mp.setattr(self.mod, "ALL_TIERS", CANONICAL)
+        self.pull_calls = 0
         self.now = None
         self.calendar_override = None
 
     def pull_summary(self, union, end):
+        self.pull_calls += 1
         return pd.DataFrame({"code": union, "rows": 1,
                              "status": ["error: 10002007" if c in self.pull_errors else "ok" for c in union],
                              "mode": "append:+1"})
@@ -369,11 +373,55 @@ def test_a_crash_at_every_write_boundary_is_detected_and_heals(env, fail_at):
     assert env.report()["as_of"] == "2026-10-26"
 
 
+@pytest.mark.parametrize("tiers", [["100000"], ["100000", "1000000", "1000000"],
+                                   ["100000", "1000000", "777"], []])
+@pytest.mark.parametrize("refresh", [[], ["--no-refresh"]])
+def test_a_live_run_on_anything_but_the_canonical_tiers_is_refused(env, tiers, refresh):
+    """A subset, a duplicate or an unknown tier would commit a partial canonical record. Refused with
+    exit 2 before the calendar, the pull or any write."""
+    before = seed_canonical(env)
+    lake, calls = _lake_bytes(env), (env.calendar_calls, env.pull_calls)
+    with pytest.raises(SystemExit) as exc:
+        env.mod.run(["--tiers", *tiers, *refresh])
+    assert exc.value.code == 2
+    assert env.canonical() == before and _lake_bytes(env) == lake
+    assert (env.calendar_calls, env.pull_calls) == calls
+    assert paper.verify_canonical_manifest(env.paper_dir) == ("consistent", [])
+
+
+def test_the_seven_canonical_tiers_run_and_commit_as_one_set(env):
+    from hermes.live.strategy import ALL_TIERS
+    env.mp.setattr(env.mod, "ALL_TIERS", ALL_TIERS)        # the real canonical set, no --tiers
+    env.lake_through(date(2026, 10, 26))
+    env.clock(at(2026, 10, 26, 18, 30))
+    assert env.mod.run([]) == 0
+    assert paper.verify_canonical_manifest(env.paper_dir) == ("consistent", [])
+    import json
+    m = json.loads((env.paper_dir / paper.CANONICAL_MANIFEST).read_text("utf-8"))
+    assert len(ALL_TIERS) == 7 and m["tiers"] == sorted(ALL_TIERS) and len(m["files"]) == 21
+    assert sorted(p.name for p in env.paper_dir.glob("report_*.json")) == \
+        sorted(f"report_{t}.json" for t in ALL_TIERS)
+
+
+def test_a_replay_and_a_backtest_may_still_select_tiers(env):
+    before = seed_canonical(env)
+    out = env.tmp / "replay"
+    assert env.mod.run(["--as-of", "2026-09-30", "--no-refresh", "--out-dir", str(out),
+                        "--tiers", "100000"]) == 0
+    assert sorted(p.name for p in out.glob("report_*.json")) == ["report_100000.json"]
+    env.mp.setattr(env.mod, "BACKTESTS_DIR", env.tmp / "backtests")
+    assert env.mod.run(["--backtest", "--no-refresh", "--tiers", "100000"]) == 0
+    assert (env.tmp / "backtests" / "deployed_full_history" / "report_100000.json").exists()
+    assert env.canonical() == before
+
+
 def test_a_tier_outside_the_last_commit_is_reported(env):
+    """A commit marker that covers fewer tiers than the directory holds (e.g. a record written by
+    hand) is reported; the live driver itself can no longer produce one."""
     env.lake_through(date(2026, 10, 26))
     env.clock(at(2026, 10, 26, 18, 30))
     assert env.mod.run(TIERS) == 0
-    assert env.mod.run(["--tiers", "100000"]) == 0          # a manual subset run commits one tier
+    paper.write_canonical_manifest(env.paper_dir, {100000: env.report(100000)})
     state, problems = paper.verify_canonical_manifest(env.paper_dir)
     assert state == "incomplete" and problems == [
         "curve_1000000.parquet: not covered by the last commit",

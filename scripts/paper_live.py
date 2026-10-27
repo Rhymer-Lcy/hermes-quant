@@ -19,7 +19,10 @@ Evidence (report field `evidence`):
   incomplete_publication  nothing is written and the run exits 75 so the wrapper retries
 A --as-of replay used to overwrite results/paper/ with a ledger cut at that date; it now prints only,
 or writes to an explicit --out-dir that is not the canonical directory. It also requires --no-refresh:
-a replay never pulls BaoStock, extends the membership or rewrites any lake file.
+a replay never pulls BaoStock, extends the membership or rewrites any lake file. A live run steps
+exactly the canonical tiers (ALL_TIERS); a subset, a duplicate or an unknown tier is refused (exit 2)
+before any pull or write, because the canonical record is committed as one set. --tiers selects a
+subset only for a --as-of replay or --backtest.
 
 Right edge: a held name whose series ends is liquidated by the engine at its last price, on the first
 bar it lacks (report field `right_edge_exits`, every such exit in the record, not only today's). On
@@ -57,7 +60,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--as-of", default=None, help="recompute through this date (YYYY-MM-DD)")
     ap.add_argument("--out-dir", default=None,
                     help="write a --as-of replay here (never the canonical results/paper/)")
-    ap.add_argument("--tiers", type=int, nargs="*", default=ALL_TIERS, help="capital tiers (CNY)")
+    ap.add_argument("--tiers", type=int, nargs="*", default=ALL_TIERS,
+                    help="capital tiers (CNY); a live run must step exactly the canonical tiers, a "
+                         "subset is for a --as-of replay or --backtest")
     ap.add_argument("--backtest", action="store_true",
                     help="full-history backtest (seed at 2015, inception=None) -> results/backtests/, "
                          "NOT the forward paper record")
@@ -68,6 +73,10 @@ def main(argv: list[str] | None = None) -> int:
 
     inception = None if args.backtest else PAPER_INCEPTION       # default forward paper; --backtest = full history
     live = not args.backtest and args.as_of is None
+    if live and sorted(args.tiers) != sorted(ALL_TIERS):     # a subset, a duplicate or an unknown tier
+        ap.error(f"a live run writes the canonical record and commits it as one set, so it must step "
+                 f"exactly the canonical tiers {ALL_TIERS} (got {args.tiers}); select tiers only for "
+                 "a --as-of replay or --backtest")
     if args.backtest:
         out_dir, persist = BACKTESTS_DIR / "deployed_full_history", True
     elif not live:

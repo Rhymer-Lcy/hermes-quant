@@ -199,7 +199,10 @@ schtasks /Create /SC WEEKLY /D MON,TUE,WED,THU,FRI /ST 19:00 /TN hermes-paper ^
   `live.paper.verify_canonical_manifest` reports `consistent`, `incomplete` (with the files that
   differ, are missing or are not covered) or `absent` (records written before the manifest existed).
   Each live run prints the previous state, and a successful run rewrites every file and the manifest.
-  A write error exits 1 (fatal, not retried); the next scheduled run heals the record.
+  A write error exits 1 (fatal, not retried); the next scheduled run heals the record. Because the
+  commit covers the canonical set, a live run must step exactly `ALL_TIERS`: `--tiers` with a
+  subset, a duplicate or an unknown tier is refused (exit 2) before any pull or write. Selecting
+  tiers remains available for a `--as-of` replay and for `--backtest`.
 - **No lake write may drop a stored bar**: a full-series write (`ingest.write_full_series`, used by
   `pull_universe` and the refresh's re-base re-pull) is refused if the new series lacks any date the
   stored file holds, which blocks an old `end` (the research builders default to 2025-12-31), a
