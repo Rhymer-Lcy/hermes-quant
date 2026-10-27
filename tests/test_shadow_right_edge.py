@@ -20,7 +20,7 @@ DROPPED = CODES[10]                         # enters the D=5 book only, then los
 TIERS = ["--tiers", "100000", "1000000"]
 
 
-def panels(last_bar_missing=True, end="2026-09-30"):
+def panels(last_bar_missing=True, end="2026-09-30", missing_bars=1):
     """D=1's September signal bar is 08-31 and D=5's is 09-04; DROPPED jumps into the top ten from
     09-02, so only the D=5 book buys it. Its 09-30 bar is then absent (not a delisting)."""
     dates = pd.bdate_range("2026-06-18", end)
@@ -31,7 +31,7 @@ def panels(last_bar_missing=True, end="2026-09-30"):
                           index=dates, columns=CODES)
     signal.loc[signal.index >= "2026-09-02", DROPPED] = 100.0
     if last_bar_missing:
-        close.loc[close.index[-1], DROPPED] = np.nan
+        close.loc[close.index[-missing_bars:], DROPPED] = np.nan
     return close, signal, (lambda _d: set(CODES))
 
 
@@ -39,6 +39,13 @@ def test_the_shadow_reports_a_right_edge_exit_the_canonical_book_does_not_hold()
     r = sh.shadow_step(1_000_000, persist=False, panels=panels())
     assert DROPPED not in r["d1_positions"]       # the canonical check would never see it
     assert [t["code"] for t in r["today_trades"] if t["shares"] < 0] == [DROPPED]
+    assert r["right_edge_exits"] == [DROPPED]
+
+
+def test_a_name_absent_for_two_sessions_is_still_reported():
+    """The forced exit is dated on the first missing bar (09-29), not on the latest one."""
+    r = sh.shadow_step(1_000_000, persist=False, panels=panels(missing_bars=2))
+    assert [t["code"] for t in r["today_trades"] if t["shares"] < 0] == []
     assert r["right_edge_exits"] == [DROPPED]
 
 

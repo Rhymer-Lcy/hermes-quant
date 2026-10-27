@@ -318,12 +318,12 @@ def shadow_step(capital: float, *, as_of: str | None = None, spec: DeployedStrat
         "total_costs_since_shadow_inception": s["costs"],
         "today_trades": [{**t, "date": t["date"].strftime("%Y-%m-%d")}
                          for t in s["res"].trades if t["date"] == today],
-        # names the shadow sold today although they have no bar today: the engine's right-edge
-        # liquidation (see live.paper.live_step). The shadow can hold names the canonical book does
-        # not, so the canonical run's check does not cover them; the driver checks these itself.
-        "right_edge_exits": sorted({t["code"] for t in s["res"].trades
-                                    if t["date"] == today and t["shares"] < 0
-                                    and pd.isna(close.loc[today].get(t["code"]))}),
+        # names the shadow force-sold on a bar without their price, anywhere in the record: the
+        # engine's right-edge liquidation (see live.paper.live_step). The shadow can hold names the
+        # canonical book does not, so the canonical run's check does not cover them; the driver
+        # checks these itself.
+        "right_edge_exits": sorted({t["code"] for t in s["res"].trades if t["shares"] < 0
+                                    and pd.isna(close.loc[t["date"]].get(t["code"]))}),
         # baseline comparator on the identical panel, so one JSON answers the whole question
         "d1_equity_same_asof": b["equity"],
         "d1_return_since_shadow_inception": b["ret"],

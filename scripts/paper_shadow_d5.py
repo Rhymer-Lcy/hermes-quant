@@ -18,9 +18,9 @@ nothing:
   2  common-state parity -- the shadow path reproduces the canonical ledger EXACTLY through the
                             2026-08-28 fork bar (equity, cash, positions, shares, trades, costs)
   3  no look-ahead       -- every post-fork rebalance has signal bar < execution bar
-A forward run then computes every tier before writing any: a name the shadow sells on the latest bar
-although it has no bar there (the engine's right-edge liquidation) must be a delisting BaoStock
-records, else the run exits 75 having written nothing. The canonical run's own check covers only the
+A forward run then computes every tier before writing any: a name the shadow force-sells on a bar
+without its price (the engine's right-edge liquidation, anywhere in the record) must be a delisting
+BaoStock records, else the run exits 75 having written nothing. The canonical run's own check covers only the
 canonical book's holdings, and the shadow can hold other names.
 
 Exit codes: 0 success; 75 (EX_TEMPFAIL) transient data failure; any other nonzero = fatal.
