@@ -372,7 +372,55 @@ def test_a_tier_outside_the_last_commit_is_reported(env):
     assert env.mod.run(TIERS) == 0
     assert env.mod.run(["--tiers", "100000"]) == 0          # a manual subset run commits one tier
     state, problems = paper.verify_canonical_manifest(env.paper_dir)
-    assert state == "incomplete" and problems == ["report_1000000.json: not covered by the last commit"]
+    assert state == "incomplete" and problems == [
+        "curve_1000000.parquet: not covered by the last commit",
+        "report_1000000.json: not covered by the last commit",
+        "trades_1000000.parquet: not covered by the last commit"]
+
+
+def committed_twice(env):
+    """A committed 10-23 generation, then a committed 10-26 one; returns the 10-23 file bytes."""
+    seed_canonical(env)
+    old = env.canonical()
+    env.lake_through(date(2026, 10, 26))
+    env.clock(at(2026, 10, 26, 18, 30))
+    assert env.mod.run(TIERS) == 0
+    assert paper.verify_canonical_manifest(env.paper_dir) == ("consistent", [])
+    return old
+
+
+def test_a_file_from_an_older_generation_is_detected(env):
+    old = committed_twice(env)
+    (env.paper_dir / "report_100000.json").write_bytes(old["report_100000.json"])   # mixed generation
+    assert paper.verify_canonical_manifest(env.paper_dir) == (
+        "incomplete", ["report_100000.json: changed since the commit"])
+
+
+def test_a_missing_file_is_detected(env):
+    committed_twice(env)
+    (env.paper_dir / "trades_1000000.parquet").unlink()
+    assert paper.verify_canonical_manifest(env.paper_dir) == (
+        "incomplete", ["trades_1000000.parquet: missing"])
+
+
+def test_an_orphan_tier_file_is_detected_but_other_lines_are_not(env):
+    committed_twice(env)
+    (env.paper_dir / "cb_curve.parquet").write_bytes(b"cb line")       # the CB line shares the folder
+    (env.paper_dir / "cb_report.json").write_text("{}", encoding="utf-8")
+    assert paper.verify_canonical_manifest(env.paper_dir) == ("consistent", [])
+    (env.paper_dir / "curve_777.parquet").write_bytes(b"stale")
+    assert paper.verify_canonical_manifest(env.paper_dir) == (
+        "incomplete", ["curve_777.parquet: not covered by the last commit"])
+
+
+def test_the_next_run_reports_the_torn_state_then_heals_it(env, capsys):
+    old = committed_twice(env)
+    (env.paper_dir / "report_100000.json").write_bytes(old["report_100000.json"])
+    capsys.readouterr()
+    assert env.mod.run(TIERS) == 0
+    out = capsys.readouterr().out
+    assert "previous canonical write: incomplete (report_100000.json: changed since the commit)" in out
+    assert paper.verify_canonical_manifest(env.paper_dir) == ("consistent", [])
 
 
 # ---- right edge: a held name without a bar on the session ----------------------------------

@@ -194,8 +194,10 @@ def write_canonical_manifest(out_dir, reports: dict) -> dict:
 
 def verify_canonical_manifest(out_dir) -> tuple[str, list[str]]:
     """'consistent' when the manifest exists, every file it lists matches its hash, and every
-    report_*.json on disk is covered by it; 'absent' when there is no manifest (records written
-    before the commit point existed); otherwise 'incomplete', with the reasons."""
+    tier file on disk (curve_*, trades_*, report_*) is covered by it; 'absent' when there is no
+    manifest (records written before the commit point existed); otherwise 'incomplete', with the
+    reasons: a listed file missing, a listed file changed since the commit (stale or from another
+    generation), or a tier file the commit does not cover."""
     path = out_dir / CANONICAL_MANIFEST
     if not path.exists():
         return "absent", []
@@ -203,7 +205,7 @@ def verify_canonical_manifest(out_dir) -> tuple[str, list[str]]:
     problems = [f"{name}: {'missing' if not (out_dir / name).exists() else 'changed since the commit'}"
                 for name, digest in m["files"].items()
                 if not (out_dir / name).exists() or _sha256(out_dir / name) != digest]
-    listed = {name for name in m["files"] if name.startswith("report_")}
-    problems += [f"{p.name}: not covered by the last commit"
-                 for p in sorted(out_dir.glob("report_*.json")) if p.name not in listed]
+    on_disk = sorted(p for pattern in ("curve_*.parquet", "trades_*.parquet", "report_*.json")
+                     for p in out_dir.glob(pattern))
+    problems += [f"{p.name}: not covered by the last commit" for p in on_disk if p.name not in m["files"]]
     return ("consistent" if not problems else "incomplete"), problems
