@@ -155,6 +155,37 @@ def test_current_session_is_written_with_its_evidence(env):
     assert r["run_date"] == "2026-10-26" and r["session_coverage"] == 1.0
 
 
+def not_held(env, tier=1000000):
+    held = set(env.report(tier)["positions"])
+    return next(c for c in CODES if c not in held)
+
+
+def test_a_member_without_a_lake_file_blocks_the_record(env, capsys):
+    """11 of 12 members carry the session; the twelfth has no lake file at all. The old ratio dropped
+    it from the denominator (11/11 = 100%) and wrote the record."""
+    before = seed_canonical(env)
+    code = not_held(env)
+    env.lake_through(date(2026, 10, 26))
+    (env.daily / f"{code.replace('.', '_')}.parquet").unlink()
+    env.clock(at(2026, 10, 26, 18, 30))
+    assert env.mod.run(TIERS) == 75
+    err = capsys.readouterr().err
+    assert "incomplete_lake" in err and f"no lake file: ['{code}']" in err
+    assert env.canonical() == before
+
+
+def test_a_failed_pull_within_tolerance_is_written_and_reported(env):
+    seed_canonical(env)
+    code = not_held(env)
+    env.lake_through(date(2026, 10, 26), absent=[code])
+    env.pull_errors = {code}
+    env.clock(at(2026, 10, 26, 18, 30))
+    assert env.mod.run(TIERS) == 0
+    r = env.report(1000000)
+    assert r["session_pull_errors"] == [code] and r["session_missing_files"] == []
+    assert r["session_coverage"] == pytest.approx(11 / 12, abs=1e-4)
+
+
 def test_stale_lake_exits_75_and_writes_nothing(env, capsys):
     before = seed_canonical(env)
     env.clock(at(2026, 10, 26, 18, 30))                 # Monday's session is due; lake ends Friday

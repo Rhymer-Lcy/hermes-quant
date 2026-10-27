@@ -100,6 +100,12 @@ def main(argv: list[str] | None = None) -> int:
     print(f"evidence: {status['evidence']}" + (
         f" (session {status['session_date']}, {status['session_coverage']:.1%} of current members, "
         f"checked {status['session_checked_at']})" if status.get("session_date") else ""))
+    if "session_members" in status:
+        print(f"members: {status['session_members']}, with the bar {status['session_members_with_bar']} "
+              f"(suspended {status['session_suspended']}), no lake file "
+              f"{status['session_missing_files']}, failed pull {status['session_pull_errors']}, "
+              f"verified delisted {status['session_terminal']}, no bar {status['session_without_bar']} "
+              f"(delisting lookup: {status['session_terminal_lookup']})")
     print(f"  {'band':>6} {'tier':>9} {'as_of':>12} {'equity':>14} {'totRet':>8} {'maxDD':>8} "
           f"{'avgN':>6} {'pos':>4} {'todayTrades':>12}")
     # Pass 1 computes every tier without writing. On the live path the canonical record is written

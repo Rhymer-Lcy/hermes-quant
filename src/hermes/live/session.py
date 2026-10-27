@@ -13,8 +13,11 @@ reference stock's latest bar.
   * Expected session: today if today is a session and its EOD publication is due (PUBLICATION_DUE),
     else the previous session. A weekend or holiday therefore expects the last session before it.
   * Assessment (`assess_session`): classifies the lake against that expectation as
-    current_session / stale_source / incomplete_publication. The live refresh refuses (retryable,
-    exit 75) anything but current_session before a canonical record is written.
+    current_session / stale_source / incomplete_lake / incomplete_publication. Coverage counts EVERY
+    current member (`member_completeness`): one with no lake file stays in the denominator and
+    blocks on its own; only a delisting BaoStock records leaves it; a suspended day is a row with
+    the previous close and counts as covered. The live refresh refuses (retryable, exit 75) anything
+    but current_session before a canonical record is written.
 
 A calendar that cannot be fetched is transient (BaoStockUnavailable, retried). A calendar that
 fails validation or contradicts the lake raises CalendarInvalid, which is fatal: the record stops
@@ -32,10 +35,12 @@ CALENDAR_LOOKBACK_DAYS = 40
 CALENDAR_LOOKAHEAD_DAYS = 7
 MAX_CLOSED_RUN_DAYS = 12          # longer than any Spring Festival / National Day closure incl. weekends
 MIN_SESSION_COVERAGE = 0.90       # share of current members that must carry the session's bar
+TERMINAL_LOOKUP_SHARE = 0.20      # most members whose delisting record is looked up in one check
 
 CURRENT_SESSION = "current_session"
 STALE_SOURCE = "stale_source"
 INCOMPLETE_PUBLICATION = "incomplete_publication"
+INCOMPLETE_LAKE = "incomplete_lake"
 HISTORICAL_RECOMPUTE = "historical_recompute"
 
 
@@ -150,30 +155,110 @@ def corroborate_with_lake(cal: TradeCalendar, lake_dates, upto: date) -> None:
 
 
 @dataclass(frozen=True)
+class MemberCompleteness:
+    """Every current member, by what the lake holds for it on the assessed session. `with_bar`
+    includes `suspended` (BaoStock serves a suspended day as a row with the previous close). Of the
+    members without the bar, only a verified delisting leaves the denominator."""
+    members: tuple
+    with_bar: tuple
+    suspended: tuple              # subset of with_bar: a row with zero or no volume
+    missing_file: tuple           # no lake file at all
+    pull_error: tuple             # this run's pull failed for it, and no bar
+    terminal: tuple               # BaoStock records it delisted on or before the session
+    no_bar: tuple                 # a file, no failed pull, no bar, no verified delisting
+    terminal_lookup: str          # not_needed / done / skipped_over_cap / unavailable
+
+    @property
+    def coverage(self) -> float:
+        tradable = len(self.members) - len(self.terminal)
+        return len(self.with_bar) / tradable if tradable else 0.0
+
+
+@dataclass(frozen=True)
 class SessionCheck:
-    evidence: str                 # current_session / stale_source / incomplete_publication
+    evidence: str                 # current_session / stale_source / incomplete_lake / incomplete_publication
     expected_session: date
     session_date: date | None     # the session the lake was verified to hold (None unless current)
     lake_latest: date
-    coverage: float               # share of members with a bar on the assessed date
+    coverage: float               # share of current members (less verified delistings) with the bar
     checked_at: datetime
+    completeness: MemberCompleteness | None = None
 
     def report_fields(self) -> dict:
-        return {"evidence": self.evidence,
-                "expected_session": self.expected_session.isoformat(),
-                "session_date": self.session_date.isoformat() if self.session_date else None,
-                "session_coverage": round(self.coverage, 4),
-                "session_checked_at": self.checked_at.isoformat(timespec="seconds")}
+        out = {"evidence": self.evidence,
+               "expected_session": self.expected_session.isoformat(),
+               "session_date": self.session_date.isoformat() if self.session_date else None,
+               "session_coverage": round(self.coverage, 4),
+               "session_checked_at": self.checked_at.isoformat(timespec="seconds")}
+        c = self.completeness
+        if c is not None:
+            out.update({"session_members": len(c.members),
+                        "session_members_with_bar": len(c.with_bar),
+                        "session_suspended": len(c.suspended),
+                        "session_missing_files": list(c.missing_file),
+                        "session_pull_errors": list(c.pull_error),
+                        "session_terminal": list(c.terminal),
+                        "session_without_bar": list(c.no_bar),
+                        "session_terminal_lookup": c.terminal_lookup})
+        return out
+
+
+def member_completeness(panel: pd.DataFrame, members: list[str], session: date, *,
+                        volume: pd.DataFrame | None = None, pull_errors=(), terminal=None,
+                        min_coverage: float = MIN_SESSION_COVERAGE) -> MemberCompleteness:
+    """Classify every member against `session`. A member with no column in `panel` has no lake file
+    (load_close_panel skips a missing file) and stays in the denominator.
+
+    `terminal(codes) -> {code: outDate or None}` is consulted only when the decision depends on it
+    (coverage below `min_coverage` before any exclusion) and only for at most TERMINAL_LOOKUP_SHARE
+    of the members: a half-published day is decided without hundreds of lookups. A pull that failed
+    this run is never looked up, because its absence says nothing about a delisting."""
+    day = pd.Timestamp(session)
+    row = panel.loc[day] if day in panel.index else pd.Series(dtype=float)
+    vrow = volume.loc[day] if volume is not None and day in volume.index else pd.Series(dtype=float)
+    errors = set(pull_errors)
+    with_bar, suspended, missing_file, pull_error, unexplained = [], [], [], [], []
+    for c in members:
+        if c not in panel.columns:
+            missing_file.append(c)
+        elif pd.notna(row.get(c)):
+            with_bar.append(c)
+            v = vrow.get(c)
+            if volume is not None and (pd.isna(v) or v == 0):
+                suspended.append(c)
+        elif c in errors:
+            pull_error.append(c)
+        else:
+            unexplained.append(c)
+    raw = len(with_bar) / len(members) if members else 0.0
+    found, lookup = set(), "not_needed"
+    if unexplained and raw < min_coverage and terminal is not None:
+        if len(unexplained) > TERMINAL_LOOKUP_SHARE * len(members):
+            lookup = "skipped_over_cap"
+        else:
+            ends = terminal(unexplained)
+            found = {c for c in unexplained if ends.get(c) is not None and ends[c] <= day}
+            lookup = "done"
+    elif unexplained and raw < min_coverage:
+        lookup = "unavailable"
+    return MemberCompleteness(
+        members=tuple(members), with_bar=tuple(with_bar), suspended=tuple(suspended),
+        missing_file=tuple(missing_file), pull_error=tuple(pull_error),
+        terminal=tuple(c for c in unexplained if c in found),
+        no_bar=tuple(c for c in unexplained if c not in found), terminal_lookup=lookup)
 
 
 def assess_session(panel: pd.DataFrame, members: list[str], cal: TradeCalendar, now: datetime,
-                   min_coverage: float = MIN_SESSION_COVERAGE) -> SessionCheck:
+                   min_coverage: float = MIN_SESSION_COVERAGE, *, volume: pd.DataFrame | None = None,
+                   pull_errors=(), terminal=None) -> SessionCheck:
     """Classify the lake (a date x code close panel) against the expected session.
 
     current_session: the lake's latest date is a session no earlier than the expected one (a run
-    before PUBLICATION_DUE may already hold today's bars) and at least `min_coverage` of `members`
-    carry a bar on it. stale_source: the lake ends before the expected session. Raises
-    CalendarInvalid for a bar dated on a non-session day or in the future."""
+    before PUBLICATION_DUE may already hold today's bars), every current member has a lake file, and
+    at least `min_coverage` of the current members, less verified delistings, carry a bar on it.
+    stale_source: the lake ends before the expected session. incomplete_lake: a current member has
+    no lake file at all, which no ratio may absorb. incomplete_publication: too few members carry the
+    bar. Raises CalendarInvalid for a bar dated on a non-session day or in the future."""
     now = now.astimezone(BEIJING)
     expected = expected_session(cal, now)
     latest = pd.Timestamp(panel.index.max()).date()
@@ -181,10 +266,13 @@ def assess_session(panel: pd.DataFrame, members: list[str], cal: TradeCalendar, 
         raise CalendarInvalid(f"the lake holds a bar dated {latest}, after today {now.date()}")
     if not cal.is_session(latest):
         raise CalendarInvalid(f"the lake's latest bar {latest} is not a session day")
-    cols = [c for c in members if c in panel.columns]
     if latest < expected:                       # no member can carry a bar the lake does not reach
         return SessionCheck(STALE_SOURCE, expected, None, latest, 0.0, now)
-    cov = float(panel.loc[pd.Timestamp(latest), cols].notna().mean()) if cols else 0.0
+    comp = member_completeness(panel, members, latest, volume=volume, pull_errors=pull_errors,
+                               terminal=terminal, min_coverage=min_coverage)
+    cov = comp.coverage
+    if comp.missing_file:
+        return SessionCheck(INCOMPLETE_LAKE, expected, None, latest, cov, now, comp)
     if cov < min_coverage:
-        return SessionCheck(INCOMPLETE_PUBLICATION, expected, None, latest, cov, now)
-    return SessionCheck(CURRENT_SESSION, expected, latest, latest, cov, now)
+        return SessionCheck(INCOMPLETE_PUBLICATION, expected, None, latest, cov, now, comp)
+    return SessionCheck(CURRENT_SESSION, expected, latest, latest, cov, now, comp)

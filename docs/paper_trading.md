@@ -215,6 +215,17 @@ schtasks /Create /SC WEEKLY /D MON,TUE,WED,THU,FRI /ST 19:00 /TN hermes-paper ^
   `BaoStockUnavailable` (exit 75), so a run that lands mid-publication retries until publication
   completes. (`feed.assert_publication_complete`, the older check on the lake's own latest date, is
   kept only for an explicit historical `refresh(end=...)`.)
+- **Coverage counts every current member** (`session.member_completeness`). Both ratios used to
+  drop a member with no lake file from numerator and denominator alike, because `load_close_panel`
+  skips a missing file, so a lake missing whole members read as fully covered. Each member is now
+  classified, and each class is listed in the report (`session_members`, `_with_bar`,
+  `_suspended`, `_missing_files`, `_pull_errors`, `_terminal`, `_without_bar`):
+  a suspended day is a row with the previous close and counts as covered; a failed pull or an
+  unexplained absence counts as uncovered; a member with no lake file is uncovered AND blocks on its
+  own (evidence `incomplete_lake`, exit 75), since nothing can be said about it; only a delisting
+  BaoStock records on or before the session leaves the denominator. That lookup runs only when the
+  decision depends on it, for at most 20% of the members, and never for a failed pull
+  (`session_terminal_lookup` records whether it ran).
 
 ## Restatement of 2026-10-25 (lake adjustment basis)
 

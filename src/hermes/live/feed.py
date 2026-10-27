@@ -115,11 +115,12 @@ def update_daily_bars(union: list[str], end: str | None = None,
 
 
 def latest_coverage(panel: pd.DataFrame, members: list[str]) -> tuple[pd.Timestamp, float]:
-    """(lake's latest date, fraction of `members` that carry a bar on it). Pure and testable."""
+    """(lake's latest date, fraction of `members` that carry a bar on it). Pure and testable. A
+    member with no column (no lake file) counts as uncovered, never as absent from the ratio."""
     latest = panel.index[-1]
-    cols = [c for c in members if c in panel.columns]
-    cov = float(panel.loc[latest, cols].notna().mean()) if cols else 0.0
-    return latest, cov
+    row = panel.loc[latest]
+    cov = sum(pd.notna(row.get(c)) for c in members) / len(members) if members else 0.0
+    return latest, float(cov)
 
 
 def current_members(mdf: pd.DataFrame) -> list[str]:
@@ -210,19 +211,31 @@ class RefreshResult:
     check: ses.SessionCheck | None      # None for a historical (explicit `end`) refresh
 
 
-def verify_session(cal: ses.TradeCalendar, now: datetime, members: list[str]) -> ses.SessionCheck:
-    """The lake must hold the expected session (see live.session): assess it, cross-check the
-    calendar against the lake's own dates, and raise BaoStockUnavailable (retryable) unless the
-    evidence is current_session. CalendarInvalid (fatal) propagates."""
+def verify_session(cal: ses.TradeCalendar, now: datetime, members: list[str],
+                   summary: pd.DataFrame | None = None) -> ses.SessionCheck:
+    """The lake must hold the expected session (see live.session): assess it over EVERY current
+    member, cross-check the calendar against the lake's own dates, and raise BaoStockUnavailable
+    (retryable) unless the evidence is current_session. `summary` (this run's pull) marks the
+    members whose pull failed. CalendarInvalid (fatal) propagates."""
     panel = load_close_panel(codes=members, field="close")
-    check = ses.assess_session(panel, members, cal, now)
+    if panel.empty:
+        raise BaoStockUnavailable(f"the lake holds no bar for any of the {len(members)} current members")
+    volume = load_close_panel(codes=members, field="volume")
+    errors = set() if summary is None or not len(summary) else \
+        set(summary.loc[summary["status"] != "ok", "code"])
+    check = ses.assess_session(panel, members, cal, now, volume=volume, pull_errors=errors,
+                               terminal=terminal_dates)
     ses.corroborate_with_lake(cal, panel.index, upto=check.lake_latest)
     if check.evidence != ses.CURRENT_SESSION:
+        c = check.completeness
+        detail = "" if c is None else (
+            f"; no lake file: {list(c.missing_file)[:10]}, failed pull: {list(c.pull_error)[:10]}, "
+            f"no bar: {len(c.no_bar)}, verified delisted: {len(c.terminal)}")
         raise BaoStockUnavailable(
             f"{check.evidence}: the {check.expected_session} session is due but the lake ends "
             f"{check.lake_latest} with {check.coverage:.1%} of current members on that date "
-            f"(need {ses.MIN_SESSION_COVERAGE:.0%}); refusing to update the record -- retry once "
-            "BaoStock has published the session")
+            f"(need {ses.MIN_SESSION_COVERAGE:.0%}, and a lake file for every member){detail}; "
+            "refusing to update the record -- retry once BaoStock has published the session")
     return check
 
 
@@ -247,5 +260,5 @@ def refresh(end: str | None = None, *, now: datetime | None = None,
     today = now.astimezone(ses.BEIJING).date().isoformat()
     mdf, union, _ = extend_membership(today)
     summary = update_daily_bars(union, today)
-    check = verify_session(cal, now, current_members(mdf))
+    check = verify_session(cal, now, current_members(mdf), summary)
     return RefreshResult(mdf, union, summary, check)

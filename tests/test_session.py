@@ -151,9 +151,13 @@ def test_a_bar_dated_on_a_holiday_or_in_the_future_is_rejected():
 def test_report_fields_are_iso_strings():
     chk = ss.assess_session(panel(date(2026, 10, 26)), MEMBERS, cal(), at(2026, 10, 26, 18, 5))
     f = chk.report_fields()
-    assert f == {"evidence": "current_session", "expected_session": "2026-10-26",
-                 "session_date": "2026-10-26", "session_coverage": 1.0,
-                 "session_checked_at": "2026-10-26T18:05:00+08:00"}
+    assert {k: f[k] for k in ("evidence", "expected_session", "session_date", "session_coverage",
+                              "session_checked_at")} == {
+        "evidence": "current_session", "expected_session": "2026-10-26",
+        "session_date": "2026-10-26", "session_coverage": 1.0,
+        "session_checked_at": "2026-10-26T18:05:00+08:00"}
+    assert f["session_members"] == 200 and f["session_missing_files"] == []
+    assert f["session_terminal_lookup"] == "not_needed"
 
 
 # ---- fetching -------------------------------------------------------------------------------
