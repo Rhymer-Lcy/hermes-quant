@@ -89,6 +89,17 @@ Each shadow report carries its own baseline comparator (`d1_equity_same_asof`,
 
 Any failure exits nonzero **having written nothing**.
 
+**Right edge, checked before the first write.** The engine liquidates a held name whose series
+ends at its last price, on the first bar it lacks, which is right for a delisting and fabricates a
+sell when the bar is merely absent. The canonical run checks this only for the canonical book's
+holdings, and the shadow can hold other names (the books diverge from 2026-09-01, when D=1
+rebalances and the shadow does not), so the driver computes every tier first and requires each such
+name anywhere in the record (report field `right_edge_exits`) to be a delisting BaoStock records on
+or before the session. That delisting lookup is the shadow's only network call and is bounded
+(`TERMINAL_LOOKUP_TIMEOUT_S`, 120 s), since the shadow runs outside the wrapper's idle watchdog.
+Otherwise it exits 75 having written no tier and no manifest; the wrapper discards the code, and
+the next run recomputes from the seed.
+
 ## The persistence outage, and why the reconstructed bars are still prospective evidence
 
 **Prospectively specified, retrospectively reconstructed after an operational persistence outage.**
@@ -207,8 +218,11 @@ changing the experiment has to be a deliberate, visible act.
 ```
 python scripts/paper_shadow_d5.py                # gates, then persist (no data refresh)
 python scripts/paper_shadow_d5.py --dry-run      # gates + report, write nothing
-python scripts/paper_shadow_d5.py --as-of 2026-09-30
+python scripts/paper_shadow_d5.py --as-of 2026-09-30   # replay, print only
 ```
+
+A `--as-of` replay is never persisted: writing it would replace the forward record with a ledger
+cut at that date.
 
 **A note on the next execution dates.** D=1's next rebalance is expected on 2026-09-01 and the
 shadow's on 2026-09-07 (the 5th is a Saturday). These are **projections from the current trading

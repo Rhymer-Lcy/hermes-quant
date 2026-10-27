@@ -17,7 +17,8 @@ seed, so the equity curve stays self-consistent.
 """
 from __future__ import annotations
 
-from datetime import date
+from dataclasses import dataclass
+from datetime import datetime
 
 import baostock as bs
 import pandas as pd
@@ -30,10 +31,12 @@ from ..data.sources import baostock_source as bss
 from ..data.sources.baostock_source import BaoStockUnavailable
 from ..io import atomic_to_parquet
 from ..paths import ensure_dirs
+from . import session as ses
 
 
 def _today() -> str:
-    return date.today().strftime("%Y-%m-%d")
+    """Today's date in Beijing, the market's own calendar (the machine runs on US Eastern time)."""
+    return ses.beijing_now().date().isoformat()
 
 
 def extend_membership(end: str | None = None) -> tuple[pd.DataFrame, list[str], list[str]]:
@@ -112,11 +115,12 @@ def update_daily_bars(union: list[str], end: str | None = None,
 
 
 def latest_coverage(panel: pd.DataFrame, members: list[str]) -> tuple[pd.Timestamp, float]:
-    """(lake's latest date, fraction of `members` that carry a bar on it). Pure and testable."""
+    """(lake's latest date, fraction of `members` that carry a bar on it). Pure and testable. A
+    member with no column (no lake file) counts as uncovered, never as absent from the ratio."""
     latest = panel.index[-1]
-    cols = [c for c in members if c in panel.columns]
-    cov = float(panel.loc[latest, cols].notna().mean()) if cols else 0.0
-    return latest, cov
+    row = panel.loc[latest]
+    cov = sum(pd.notna(row.get(c)) for c in members) / len(members) if members else 0.0
+    return latest, float(cov)
 
 
 def current_members(mdf: pd.DataFrame) -> list[str]:
@@ -142,13 +146,119 @@ def assert_publication_complete(members: list[str], min_coverage: float = 0.90) 
     return cov
 
 
-def refresh(end: str | None = None) -> tuple[pd.DataFrame, list[str]]:
-    """One call: extend membership to `end`, refresh the union's daily bars, and verify the day's
-    publication is complete -- each failing loud (see update_daily_bars / assert_publication_complete)
-    before any live report is written. Returns (membership_df, union). Run after BaoStock has posted
-    the day's EOD data (~2-3 h after close; the task is scheduled in the evening)."""
-    end = end or _today()
-    mdf, union, _ = extend_membership(end)
-    update_daily_bars(union, end)
-    assert_publication_complete(current_members(mdf))
-    return mdf, union
+PULL_ERROR = "pull_error"
+MISSING_PUBLISHED_BAR = "missing_published_bar"
+VERIFIED_TERMINAL = "verified_terminal"
+
+
+def terminal_dates(codes: list[str]) -> dict[str, "pd.Timestamp | None"]:
+    """BaoStock's own delisting record per code: the outDate of a code whose status is 0
+    (delisted), else None. A query failure is transient (BaoStockUnavailable)."""
+    out = {}
+    with bss.session():
+        for code in codes:
+            rs = bs.query_stock_basic(code=code)
+            if rs.error_code != "0":
+                raise BaoStockUnavailable(f"stock_basic query failed for {code}: "
+                                          f"{rs.error_code} {rs.error_msg}")
+            rows = []
+            while rs.next():
+                rows.append(dict(zip(rs.fields, rs.get_row_data())))
+            row = rows[0] if rows else {}
+            out[code] = (pd.Timestamp(row["outDate"])
+                         if row.get("status") == "0" and row.get("outDate") else None)
+    return out
+
+
+def classify_right_edge(codes: list[str], session_date: "pd.Timestamp", summary: pd.DataFrame | None,
+                        terminal=None) -> dict[str, str]:
+    """Why each code has no bar on `session_date`: PULL_ERROR (this run's pull failed for it),
+    VERIFIED_TERMINAL (BaoStock records it delisted on or before the session), else
+    MISSING_PUBLISHED_BAR (fetched, no bar, no terminal record)."""
+    errors = set()
+    if summary is not None and len(summary):
+        errors = set(summary.loc[summary["status"] != "ok", "code"])
+    out = {c: PULL_ERROR for c in codes if c in errors}
+    rest = [c for c in codes if c not in out]
+    if rest:
+        ends = (terminal or terminal_dates)(rest)
+        for c in rest:
+            end = ends.get(c)
+            out[c] = (VERIFIED_TERMINAL if end is not None and end <= pd.Timestamp(session_date)
+                      else MISSING_PUBLISHED_BAR)
+    return out
+
+
+def assert_right_edge_safe(codes: list[str], session_date, summary: pd.DataFrame | None,
+                           terminal=None) -> dict[str, str]:
+    """Allow a right-edge exit only for a verified delisting. Any other disposition raises
+    BaoStockUnavailable (exit 75) so no fabricated sell reaches the canonical record."""
+    disp = classify_right_edge(codes, session_date, summary, terminal)
+    blocked = {c: d for c, d in disp.items() if d != VERIFIED_TERMINAL}
+    if blocked:
+        raise BaoStockUnavailable(
+            f"held name(s) without a {pd.Timestamp(session_date).date()} bar that the engine would "
+            f"liquidate at their last price: {blocked}; refusing to write a sell the market did not "
+            "print -- retry once the bar is published, or verify the delisting")
+    return disp
+
+
+@dataclass(frozen=True)
+class RefreshResult:
+    mdf: pd.DataFrame
+    union: list[str]
+    summary: pd.DataFrame
+    check: ses.SessionCheck | None      # None for a historical (explicit `end`) refresh
+
+
+def verify_session(cal: ses.TradeCalendar, now: datetime, members: list[str],
+                   summary: pd.DataFrame | None = None) -> ses.SessionCheck:
+    """The lake must hold the expected session (see live.session): assess it over EVERY current
+    member, cross-check the calendar against the lake's own dates, and raise BaoStockUnavailable
+    (retryable) unless the evidence is current_session. `summary` (this run's pull) marks the
+    members whose pull failed. CalendarInvalid (fatal) propagates."""
+    panel = load_close_panel(codes=members, field="close")
+    if panel.empty:
+        raise BaoStockUnavailable(f"the lake holds no bar for any of the {len(members)} current members")
+    volume = load_close_panel(codes=members, field="volume")
+    errors = set() if summary is None or not len(summary) else \
+        set(summary.loc[summary["status"] != "ok", "code"])
+    check = ses.assess_session(panel, members, cal, now, volume=volume, pull_errors=errors,
+                               terminal=terminal_dates)
+    ses.corroborate_with_lake(cal, panel.index, upto=check.lake_latest)
+    if check.evidence != ses.CURRENT_SESSION:
+        c = check.completeness
+        detail = "" if c is None else (
+            f"; no lake file: {list(c.missing_file)[:10]}, failed pull: {list(c.pull_error)[:10]}, "
+            f"no bar: {len(c.no_bar)}, verified delisted: {len(c.terminal)}")
+        raise BaoStockUnavailable(
+            f"{check.evidence}: the {check.expected_session} session is due but the lake ends "
+            f"{check.lake_latest} with {check.coverage:.1%} of current members on that date "
+            f"(need {ses.MIN_SESSION_COVERAGE:.0%}, and a lake file for every member){detail}; "
+            "refusing to update the record -- retry once BaoStock has published the session")
+    return check
+
+
+def refresh(end: str | None = None, *, now: datetime | None = None,
+            fetch_calendar=None) -> RefreshResult:
+    """One call: extend membership, refresh the union's daily bars, and verify the publication --
+    each failing loud before any live report is written.
+
+    Live mode (`end` None): the expected session comes from a validated exchange calendar in Beijing
+    time (live.session); the pull runs through Beijing today; afterwards the lake must hold that
+    session for >= 90% of current members, or BaoStockUnavailable (exit 75) is raised. A calendar
+    that cannot be fetched is also BaoStockUnavailable; one that contradicts the lake is fatal.
+    Historical mode (`end` given): pull through `end` and keep only the legacy coverage check on the
+    lake's own last date; no session is claimed (check None)."""
+    if end is not None:
+        mdf, union, _ = extend_membership(end)
+        summary = update_daily_bars(union, end)
+        assert_publication_complete(current_members(mdf))
+        return RefreshResult(mdf, union, summary, None)
+    now = now or ses.beijing_now()
+    cal = (fetch_calendar or ses.fetch_calendar)(now)
+    today = now.astimezone(ses.BEIJING).date().isoformat()
+    mdf, union, _ = extend_membership(today)
+    summary = update_daily_bars(union, today)
+    check = verify_session(cal, now, current_members(mdf), summary)
+    return RefreshResult(mdf, union, summary, check)

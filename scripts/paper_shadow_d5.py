@@ -2,12 +2,15 @@
 
   python scripts/paper_shadow_d5.py                  # recompute on the current lake, persist
   python scripts/paper_shadow_d5.py --dry-run        # gates + report, write nothing
-  python scripts/paper_shadow_d5.py --as-of 2026-09-30   # replay through a date
+  python scripts/paper_shadow_d5.py --as-of 2026-09-30   # replay through a date, print only
 
 Never refreshes the lake: the canonical run owns the data pull, and the shadow reads whatever the
 canonical run already validated. That ordering is what keeps a shadow failure from touching the
 canonical record -- this script writes only under results/paper_shadow/d5/ and asserts, before and
 after, that results/paper/ is byte-for-byte unchanged.
+
+A --as-of replay is never persisted: writing it would overwrite the forward shadow record with a
+ledger cut at that date.
 
 Three blocking gates run before any output is written; any failure exits nonzero having written
 nothing:
@@ -15,6 +18,12 @@ nothing:
   2  common-state parity -- the shadow path reproduces the canonical ledger EXACTLY through the
                             2026-08-28 fork bar (equity, cash, positions, shares, trades, costs)
   3  no look-ahead       -- every post-fork rebalance has signal bar < execution bar
+A forward run then computes every tier before writing any: a name the shadow force-sells on a bar
+without its price (the engine's right-edge liquidation, anywhere in the record) must be a delisting
+BaoStock records, else the run exits 75 having written nothing. That lookup is this script's only
+network call and runs under a deadline (TERMINAL_LOOKUP_TIMEOUT_S), because the shadow runs outside
+the wrapper's idle watchdog. The canonical run's own check covers only the canonical book's
+holdings, and the shadow can hold other names.
 
 Exit codes: 0 success; 75 (EX_TEMPFAIL) transient data failure; any other nonzero = fatal.
 The wrapper treats ALL shadow exit codes as non-fatal for the canonical task.
@@ -25,9 +34,13 @@ import argparse
 import json
 import subprocess
 import sys
+import threading
 
 import pandas as pd
 
+from hermes.data.sources.baostock_source import BaoStockUnavailable
+from hermes.live import feed
+from hermes.live.feed import assert_right_edge_safe
 from hermes.live.paper import live_step
 from hermes.live.shadow import (BASELINE_DAY, CANDIDATE_DAY, SCHEMA_VERSION, SHADOW_DIR,
                                 SHADOW_INCEPTION_ASOF, ShadowGateError,
@@ -39,6 +52,31 @@ from hermes.paths import PAPER_DIR
 from hermes.research.backtest.schedule import calendar_rebalance_schedule
 
 TOL = 1e-9
+TERMINAL_LOOKUP_TIMEOUT_S = 120     # the delisting lookup is this driver's only network call
+
+
+def bounded_terminal_dates(codes, timeout_s: float | None = None):
+    """feed.terminal_dates with a deadline. The shadow runs after the canonical attempt, outside the
+    wrapper's idle watchdog, and a BaoStock socket has no timeout of its own: a hung lookup would
+    hold the scheduled task open. Past the deadline this raises BaoStockUnavailable (nothing is
+    written) and leaves the lookup on a daemon thread, which does not keep the process alive."""
+    timeout_s = TERMINAL_LOOKUP_TIMEOUT_S if timeout_s is None else timeout_s
+    box: dict = {}
+
+    def call():
+        try:
+            box["value"] = feed.terminal_dates(codes)
+        except BaseException as exc:            # noqa: BLE001 -- re-raised on the caller's thread
+            box["error"] = exc
+
+    t = threading.Thread(target=call, name="terminal-lookup", daemon=True)
+    t.start()
+    t.join(timeout_s)
+    if t.is_alive():
+        raise BaoStockUnavailable(f"delisting lookup for {codes} did not answer within {timeout_s} s")
+    if "error" in box:
+        raise box["error"]
+    return box["value"]
 
 
 def head_commit() -> str:
@@ -140,12 +178,13 @@ def gate_no_lookahead(panels) -> None:
         print("  none yet (the fork bar is the latest bar) -- vacuously PASS")
 
 
-def main() -> None:
+def main(argv: list[str] | None = None) -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--dry-run", action="store_true", help="run the gates, write nothing")
     ap.add_argument("--as-of", default=None, help="recompute through this date (YYYY-MM-DD)")
     ap.add_argument("--tiers", type=int, nargs="*", default=ALL_TIERS)
-    args = ap.parse_args()
+    args = ap.parse_args(argv)
+    persist = not args.dry_run and args.as_of is None      # a replay never overwrites the record
 
     before = fingerprint_canonical()
     print(f"canonical results/paper fingerprinted: {len(before)} files (write-protected)\n")
@@ -160,16 +199,27 @@ def main() -> None:
     prov = runtime_provenance()
     print(f"\n=== runtime provenance ===\n  code {prov['runtime_code_sha'][:8]}   "
           f"worktree {'clean' if prov['runtime_worktree_clean'] else 'DIRTY'}")
-    if not prov["runtime_worktree_clean"] and not args.dry_run:
+    if not prov["runtime_worktree_clean"] and persist:
         raise ShadowGateError(
             "refusing to persist forward evidence from a DIRTY worktree -- the result could not be "
             "traced to any revision. Commit (or stash) first, or use --dry-run. The canonical D=1 "
             "record is unaffected either way.")
 
+    # Pass 1 computes every tier without writing; the right-edge check runs on all of them before
+    # the first write (manifest included), and pass 2 below must reproduce pass 1.
+    from hermes.live.shadow import shadow_step
+    reports = {cap: shadow_step(cap, as_of=args.as_of, persist=False, panels=panels)
+               for cap in args.tiers}
+    exits = sorted({c for r in reports.values() for c in r["right_edge_exits"]})
+    if exits and args.as_of is None:
+        disp = assert_right_edge_safe(exits, panels[0].index[-1], None,
+                                      terminal=bounded_terminal_dates)
+        print(f"\n  right-edge exits verified as delistings: {disp}")
+
     manifest_path = SHADOW_DIR / "manifest.json"
     expected = build_manifest(head_commit())
     on_disk = validate_manifest(manifest_path, expected)
-    if not args.dry_run:
+    if persist:
         SHADOW_DIR.mkdir(parents=True, exist_ok=True)
         if not manifest_path.exists():                  # frozen on first write, never rewritten
             manifest_path.write_text(json.dumps(expected, indent=2, ensure_ascii=False),
@@ -195,14 +245,22 @@ def main() -> None:
             print(f"  manifest validated (frozen at {on_disk.get('experiment_freeze_sha', '?')[:8]}, "
                   f"schema v{on_disk.get('schema_version')})")
 
-    from hermes.live.shadow import shadow_step
+    if persist:
+        clock = {"run_date", "lake_lag_days", "fresh"}      # may tick over midnight between passes
+        for cap in args.tiers:
+            r = shadow_step(cap, as_of=args.as_of, persist=True, panels=panels)
+            if {k: v for k, v in r.items() if k not in clock} != \
+                    {k: v for k, v in reports[cap].items() if k not in clock}:
+                raise ShadowGateError(f"tier {cap}: the written shadow report differs from the "
+                                      "checked one")
+            reports[cap] = r
     print(f"\nD=5 forward shadow (candidate {CANDIDATE_DAY} vs baseline {BASELINE_DAY}), "
           f"inception {SHADOW_INCEPTION_ASOF}")
     print(f"  {'band':>6} {'tier':>9} {'as_of':>12} {'D5 equity':>14} {'D5 ret':>9} "
           f"{'D1 ret':>9} {'excess':>9} {'D5 maxDD':>9} {'trades':>7}")
     last = None
     for cap in args.tiers:
-        r = shadow_step(cap, as_of=args.as_of, persist=not args.dry_run, panels=panels)
+        r = reports[cap]
         last = r
         print(f"  {TIER_LABEL.get(cap, '?'):>6} {cap:>9,} {r['as_of']:>12} "
               f"{r['equity']:>14,.2f} {r['total_return_since_shadow_inception']:>+9.3%} "
@@ -215,8 +273,8 @@ def main() -> None:
     if last and not last["fresh"]:
         print(f"\n*** STALE: last bar {last['as_of']} is {last['lake_lag_days']}d behind "
               f"{last['run_date']} -- recomputed, not updated. ***")
-    if args.dry_run:
-        print("\n  DRY RUN: nothing written")
+    if not persist:
+        print("\n  " + ("DRY RUN" if args.dry_run else "REPLAY") + ": nothing written")
     else:
         print(f"\n  saved -> {SHADOW_DIR}")
     print("\n  NOTE: this is a FORWARD SHADOW of a historical champion that FAILED issue #21's")
@@ -225,17 +283,21 @@ def main() -> None:
     print(f"OK {last['run_date'] if last else ''} (as_of {last['as_of'] if last else '-'})")
 
 
-if __name__ == "__main__":
-    from hermes.data.sources.baostock_source import BaoStockUnavailable
-
+def run(argv: list[str] | None = None) -> int:
+    """main() with the exit-code contract: 0 success, 75 transient, 2 gate failure, 1 fatal."""
     try:
-        main()
+        main(argv)
+        return 0
     except BaoStockUnavailable as exc:
         print(f"\nRETRYABLE: shadow transient data failure: {exc}", file=sys.stderr)
-        sys.exit(75)
+        return 75
     except ShadowGateError as exc:
         print(f"\nGATE FAILURE: {exc}\nNo shadow output written.", file=sys.stderr)
-        sys.exit(2)
+        return 2
     except Exception as exc:                            # noqa: BLE001 -- fail loud, never silently
         print(f"\nERROR: paper_shadow_d5 failed: {exc}", file=sys.stderr)
-        sys.exit(1)
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(run())

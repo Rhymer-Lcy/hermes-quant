@@ -18,7 +18,6 @@ or true-live use; a monthly rebalance does not need them.
 from __future__ import annotations
 
 import json
-from datetime import date
 
 import pandas as pd
 
@@ -29,6 +28,7 @@ from ..paths import PAPER_DIR, ensure_dirs
 from ..research.backtest.frictions import AShareCosts
 from ..research.backtest.portfolio import signal_portfolio_backtest, valuation_panel
 from .ledger import LedgerState, fold_day
+from .session import beijing_now
 from .strategy import DEPLOYED, PAPER_INCEPTION, DeployedStrategy, deployed_signal
 
 
@@ -71,7 +71,8 @@ def ledger_equity(state: LedgerState) -> pd.Series:
 
 def live_step(seed_cash: float, as_of: str | None = None, *, spec: DeployedStrategy = DEPLOYED,
               costs: AShareCosts | None = None, persist: bool = True,
-              inception: str | None = PAPER_INCEPTION, out_dir=None) -> dict:
+              inception: str | None = PAPER_INCEPTION, out_dir=None,
+              status: dict | None = None) -> dict:
     """Run the DEPLOYED strategy as a PAPER account: seed `seed_cash` at the `inception` close,
     invest it fully into the current top-N there, and track forward to `as_of` (default: the latest
     bar on disk). Returns today's report. Idempotent (recompute-from-seed): re-running a date
@@ -83,6 +84,13 @@ def live_step(seed_cash: float, as_of: str | None = None, *, spec: DeployedStrat
     curve (archived separately). Reads the lake refreshed by live.feed; uses the SAME deployed_signal
     as research. Persists the equity curve, full trade log, and a JSON report under `out_dir`
     (default PAPER_DIR; the backtest mode writes to results/backtests/).
+
+    `status` (from the live session check, see live.session.SessionCheck.report_fields) is merged
+    into the report: `evidence` says whether the record holds the expected session
+    (current_session), was recomputed for a past date (historical_recompute), or ran on a stale or
+    incomplete lake. `run_date` / `lake_lag_days` / `fresh` are kept for compatibility, now counted
+    on the Beijing date; `fresh` (lag <= 4 calendar days) cannot tell a stale replay from a current
+    record and is superseded by `evidence`.
     """
     mdf = pd.read_parquet(MEMBERSHIP_PARQUET)
     union = sorted(mdf["code"].unique())
@@ -113,8 +121,20 @@ def live_step(seed_cash: float, as_of: str | None = None, *, spec: DeployedStrat
     # holiday/weekend/pre-publication run (which idempotently re-computes the prior bar) is
     # distinguishable from a fresh trading-day update. `lake_lag_days` > a long weekend (~4d)
     # means the lake is stale (no new data ingested), surfaced as a banner by paper_live.
-    run_dt = date.today()
+    run_dt = beijing_now().date()
     lake_lag = (run_dt - today.date()).days
+    # Right-edge exits: names the engine force-sold because their series ended. valuation_panel
+    # treats a series that ends as terminated and liquidates it once, at the last real price, on the
+    # FIRST bar after it -- right for a delisting, but a fabricated sell when the bar is merely absent
+    # (a failed pull, a late publication). A forced exit is exactly a sell on a bar where the name has
+    # no price (an ordinary order never fills without one). Every such sell in the recomputed record
+    # is listed, not only today's: a name absent for two sessions is sold on the first of them, so a
+    # check of today's fills alone would pass it on the second day. A suspension does not appear
+    # here: BaoStock serves a suspended day as a row with the previous close. The live driver must
+    # establish why each listed name has no bar before it writes the canonical record
+    # (live.feed.assert_right_edge_safe).
+    right_edge_exits = sorted({t["code"] for t in res.trades
+                               if t["shares"] < 0 and pd.isna(close.loc[t["date"]].get(t["code"]))})
     report = {
         "as_of": today.strftime("%Y-%m-%d"),          # last data bar (the strategy's clock)
         "run_date": run_dt.strftime("%Y-%m-%d"),       # wall-clock date this was computed
@@ -130,6 +150,8 @@ def live_step(seed_cash: float, as_of: str | None = None, *, spec: DeployedStrat
         "positions": dict(sorted(ledger.positions.items())),
         "today_trades": today_fills,
         "n_trades_total": len(res.trades),
+        "right_edge_exits": right_edge_exits,
+        **(status or {}),
     }
     if persist:
         ensure_dirs()
@@ -141,3 +163,49 @@ def live_step(seed_cash: float, as_of: str | None = None, *, spec: DeployedStrat
         atomic_write_text(json.dumps(report, ensure_ascii=False, indent=2),
                           out / f"report_{tag}.json")
     return report
+
+
+CANONICAL_MANIFEST = "canonical_manifest.json"
+
+
+def _tier_files(cap: int) -> list[str]:
+    return [f"curve_{cap}.parquet", f"trades_{cap}.parquet", f"report_{cap}.json"]
+
+
+def _sha256(path) -> str:
+    import hashlib
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def write_canonical_manifest(out_dir, reports: dict) -> dict:
+    """The COMMIT POINT of a canonical write, written last (atomically) once every tier's three files
+    are on disk: as_of, evidence and the sha256 of every file. Each file is replaced atomically, but
+    seven tiers x three files are not one transaction -- a crash between them leaves some files new
+    and some old. Such a torn state cannot be prevented here; the manifest makes it detectable
+    (verify_canonical_manifest), and the next successful run rewrites every file and the manifest."""
+    first = next(iter(reports.values()))
+    files = {name: _sha256(out_dir / name) for cap in sorted(reports) for name in _tier_files(int(cap))}
+    manifest = {"schema": 1, "as_of": first["as_of"], "evidence": first.get("evidence"),
+                "session_date": first.get("session_date"), "tiers": sorted(int(c) for c in reports),
+                "files": files}
+    atomic_write_text(json.dumps(manifest, indent=2), out_dir / CANONICAL_MANIFEST)
+    return manifest
+
+
+def verify_canonical_manifest(out_dir) -> tuple[str, list[str]]:
+    """'consistent' when the manifest exists, every file it lists matches its hash, and every
+    tier file on disk (curve_*, trades_*, report_*) is covered by it; 'absent' when there is no
+    manifest (records written before the commit point existed); otherwise 'incomplete', with the
+    reasons: a listed file missing, a listed file changed since the commit (stale or from another
+    generation), or a tier file the commit does not cover."""
+    path = out_dir / CANONICAL_MANIFEST
+    if not path.exists():
+        return "absent", []
+    m = json.loads(path.read_text(encoding="utf-8"))
+    problems = [f"{name}: {'missing' if not (out_dir / name).exists() else 'changed since the commit'}"
+                for name, digest in m["files"].items()
+                if not (out_dir / name).exists() or _sha256(out_dir / name) != digest]
+    on_disk = sorted(p for pattern in ("curve_*.parquet", "trades_*.parquet", "report_*.json")
+                     for p in out_dir.glob(pattern))
+    problems += [f"{p.name}: not covered by the last commit" for p in on_disk if p.name not in m["files"]]
+    return ("consistent" if not problems else "incomplete"), problems

@@ -30,7 +30,6 @@ def _lake(monkeypatch, tmp_path, vendor: pd.DataFrame, stored: pd.DataFrame):
     monkeypatch.setattr(ingest, "PARQUET_DIR", tmp_path)
     monkeypatch.setattr(ingest, "ensure_dirs", lambda: None)
     monkeypatch.setattr(ingest.bss, "session", nullcontext)
-    monkeypatch.setattr(ingest, "_latest_published_date", lambda end: pd.to_datetime(vendor["date"]).max())
     monkeypatch.setattr(ingest, "_daily_bars_reloginning", fake_pull)
     return daily / "sh_600000.parquet", calls
 
