@@ -15,6 +15,10 @@ nothing:
   2  common-state parity -- the shadow path reproduces the canonical ledger EXACTLY through the
                             2026-08-28 fork bar (equity, cash, positions, shares, trades, costs)
   3  no look-ahead       -- every post-fork rebalance has signal bar < execution bar
+A forward run then computes every tier before writing any: a name the shadow sells on the latest bar
+although it has no bar there (the engine's right-edge liquidation) must be a delisting BaoStock
+records, else the run exits 75 having written nothing. The canonical run's own check covers only the
+canonical book's holdings, and the shadow can hold other names.
 
 Exit codes: 0 success; 75 (EX_TEMPFAIL) transient data failure; any other nonzero = fatal.
 The wrapper treats ALL shadow exit codes as non-fatal for the canonical task.
@@ -28,6 +32,7 @@ import sys
 
 import pandas as pd
 
+from hermes.live.feed import assert_right_edge_safe
 from hermes.live.paper import live_step
 from hermes.live.shadow import (BASELINE_DAY, CANDIDATE_DAY, SCHEMA_VERSION, SHADOW_DIR,
                                 SHADOW_INCEPTION_ASOF, ShadowGateError,
@@ -140,12 +145,13 @@ def gate_no_lookahead(panels) -> None:
         print("  none yet (the fork bar is the latest bar) -- vacuously PASS")
 
 
-def main() -> None:
+def main(argv: list[str] | None = None) -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--dry-run", action="store_true", help="run the gates, write nothing")
     ap.add_argument("--as-of", default=None, help="recompute through this date (YYYY-MM-DD)")
     ap.add_argument("--tiers", type=int, nargs="*", default=ALL_TIERS)
-    args = ap.parse_args()
+    args = ap.parse_args(argv)
+    persist = not args.dry_run
 
     before = fingerprint_canonical()
     print(f"canonical results/paper fingerprinted: {len(before)} files (write-protected)\n")
@@ -160,16 +166,26 @@ def main() -> None:
     prov = runtime_provenance()
     print(f"\n=== runtime provenance ===\n  code {prov['runtime_code_sha'][:8]}   "
           f"worktree {'clean' if prov['runtime_worktree_clean'] else 'DIRTY'}")
-    if not prov["runtime_worktree_clean"] and not args.dry_run:
+    if not prov["runtime_worktree_clean"] and persist:
         raise ShadowGateError(
             "refusing to persist forward evidence from a DIRTY worktree -- the result could not be "
             "traced to any revision. Commit (or stash) first, or use --dry-run. The canonical D=1 "
             "record is unaffected either way.")
 
+    # Pass 1 computes every tier without writing; the right-edge check runs on all of them before
+    # the first write (manifest included), and pass 2 below must reproduce pass 1.
+    from hermes.live.shadow import shadow_step
+    reports = {cap: shadow_step(cap, as_of=args.as_of, persist=False, panels=panels)
+               for cap in args.tiers}
+    exits = sorted({c for r in reports.values() for c in r["right_edge_exits"]})
+    if exits and args.as_of is None:
+        disp = assert_right_edge_safe(exits, panels[0].index[-1], None)
+        print(f"\n  right-edge exits verified as delistings: {disp}")
+
     manifest_path = SHADOW_DIR / "manifest.json"
     expected = build_manifest(head_commit())
     on_disk = validate_manifest(manifest_path, expected)
-    if not args.dry_run:
+    if persist:
         SHADOW_DIR.mkdir(parents=True, exist_ok=True)
         if not manifest_path.exists():                  # frozen on first write, never rewritten
             manifest_path.write_text(json.dumps(expected, indent=2, ensure_ascii=False),
@@ -195,14 +211,22 @@ def main() -> None:
             print(f"  manifest validated (frozen at {on_disk.get('experiment_freeze_sha', '?')[:8]}, "
                   f"schema v{on_disk.get('schema_version')})")
 
-    from hermes.live.shadow import shadow_step
+    if persist:
+        clock = {"run_date", "lake_lag_days", "fresh"}      # may tick over midnight between passes
+        for cap in args.tiers:
+            r = shadow_step(cap, as_of=args.as_of, persist=True, panels=panels)
+            if {k: v for k, v in r.items() if k not in clock} != \
+                    {k: v for k, v in reports[cap].items() if k not in clock}:
+                raise ShadowGateError(f"tier {cap}: the written shadow report differs from the "
+                                      "checked one")
+            reports[cap] = r
     print(f"\nD=5 forward shadow (candidate {CANDIDATE_DAY} vs baseline {BASELINE_DAY}), "
           f"inception {SHADOW_INCEPTION_ASOF}")
     print(f"  {'band':>6} {'tier':>9} {'as_of':>12} {'D5 equity':>14} {'D5 ret':>9} "
           f"{'D1 ret':>9} {'excess':>9} {'D5 maxDD':>9} {'trades':>7}")
     last = None
     for cap in args.tiers:
-        r = shadow_step(cap, as_of=args.as_of, persist=not args.dry_run, panels=panels)
+        r = reports[cap]
         last = r
         print(f"  {TIER_LABEL.get(cap, '?'):>6} {cap:>9,} {r['as_of']:>12} "
               f"{r['equity']:>14,.2f} {r['total_return_since_shadow_inception']:>+9.3%} "
@@ -215,7 +239,7 @@ def main() -> None:
     if last and not last["fresh"]:
         print(f"\n*** STALE: last bar {last['as_of']} is {last['lake_lag_days']}d behind "
               f"{last['run_date']} -- recomputed, not updated. ***")
-    if args.dry_run:
+    if not persist:
         print("\n  DRY RUN: nothing written")
     else:
         print(f"\n  saved -> {SHADOW_DIR}")
